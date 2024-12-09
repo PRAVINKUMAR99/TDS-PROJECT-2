@@ -19,7 +19,7 @@ os.environ["AIPROXY_TOKEN"] = ""
 import os
 import pandas as pd
 #import seaborn as sns
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 from google.colab import files
 
 # 1. Upload dataset file
