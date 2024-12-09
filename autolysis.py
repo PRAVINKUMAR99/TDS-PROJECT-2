@@ -23,7 +23,11 @@ openai.api_key = os.getenv("AIPROXY_TOKEN")
 
 # Function to load dataset
 def load_dataset(file_path):
-    dataset = pd.read_csv(file_path)
+    try:
+        dataset = pd.read_csv(file_path, encoding='ISO-8859-1')  # Try other encodings if needed
+    except UnicodeDecodeError:
+        print(f"Error reading {file_path}. Try a different encoding.")
+        raise
     return dataset
 
 # Function to get summary statistics
@@ -36,7 +40,9 @@ def count_missing_values(dataset):
 
 # Function to create a correlation heatmap
 def plot_correlation_heatmap(dataset):
-    corr = dataset.corr()
+    # Select only numeric columns
+    numeric_columns = dataset.select_dtypes(include=[np.number])
+    corr = numeric_columns.corr()
     plt.figure(figsize=(10, 8))
     sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f", cbar=True)
     plt.title('Correlation Heatmap')
@@ -111,12 +117,3 @@ def main(dataset_path):
     # Create README.md report
     create_readme(dataset_path, summary_stats, missing_values)
     print(f"Analysis complete! Check the generated README.md and PNG files.")
-
-if __name__ == "__main__":
-    import sys
-    if len(sys.argv) != 2:
-        print("Usage: uv run autolysis.py <dataset.csv>")
-        sys.exit(1)
-
-    dataset_path = sys.argv[1]
-    main(dataset_path)
