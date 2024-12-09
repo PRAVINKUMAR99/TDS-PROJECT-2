@@ -14,7 +14,7 @@ Original file is located at
 # ]
 # ///
 
-!pip install-r seaborn
+
 import os
 os.environ["AIPROXY_TOKEN"] = ""
 import os
