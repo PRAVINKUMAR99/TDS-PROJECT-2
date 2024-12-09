@@ -18,11 +18,15 @@ Original file is located at
 import os
 import pandas as pd
 import seaborn as sns
+import matplotlib
 import matplotlib.pyplot as plt
 import sys
 
 # Set the AIPROXY_TOKEN environment variable (required for uv execution)
 os.environ["AIPROXY_TOKEN"] = ""
+
+# Set matplotlib backend to 'Agg' for headless environments
+matplotlib.use('Agg')
 
 # Function to get dataset path from the command-line argument
 def get_dataset_path():
@@ -60,13 +64,13 @@ def perform_analysis(dataset):
     # Create a correlation matrix
     correlation_matrix = dataset.select_dtypes(exclude='object').corr()
 
-    # 4. Visualize the Correlation Matrix using Seaborn
+    # Visualize the Correlation Matrix using Seaborn and save to file
     plt.figure(figsize=(10, 8))
     sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt='.2f')
     plt.title('Correlation Matrix')
     plt.tight_layout()
-    plt.savefig("correlation_matrix.png")
-    plt.show()
+    plt.savefig("correlation_matrix.png")  # Save the plot to a file
+    plt.close()  # Close the plot to avoid GUI-related issues
 
     return summary_stats, missing_values
 
