@@ -19,24 +19,24 @@ import os
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from tkinter import Tk
-from tkinter.filedialog import askopenfilename
+import sys
 
 # Set the AIPROXY_TOKEN (this will be required for uv to run successfully)
 os.environ["AIPROXY_TOKEN"] = ""
 
-# 1. Use file dialog to upload dataset (works in local environments)
-def upload_file():
-    print("Please select your dataset CSV file:")
-    Tk().withdraw()  # Hide the root window
-    dataset_path = askopenfilename(title="Select your dataset", filetypes=[("CSV files", "*.csv")])
-
-    # Check if the user selected a file
-    if not dataset_path:
-        print("No file selected. Exiting...")
-        exit()
-
-    print(f"File uploaded: {dataset_path}")
+# 1. Specify dataset path (no tkinter)
+def get_dataset_path():
+    if len(sys.argv) < 2:
+        print("No dataset file provided. Please specify the path to the dataset.")
+        sys.exit(1)
+    
+    dataset_path = sys.argv[1]
+    
+    if not os.path.isfile(dataset_path):
+        print(f"Error: The file {dataset_path} does not exist. Please check the file path.")
+        sys.exit(1)
+    
+    print(f"Dataset file selected: {dataset_path}")
     return dataset_path
 
 # 2. Load and analyze dataset
@@ -118,8 +118,8 @@ This README file summarizes the analysis. For further details, please refer to t
 
 # 6. Main execution
 def main():
-    # Upload the dataset
-    dataset_path = upload_file()
+    # Get dataset path from command line argument
+    dataset_path = get_dataset_path()
 
     # Load and analyze the dataset
     dataset = analyze_dataset(dataset_path)
