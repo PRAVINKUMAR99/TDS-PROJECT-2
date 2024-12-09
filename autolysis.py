@@ -7,7 +7,7 @@ Original file is located at
     https://colab.research.google.com/drive/1JrGStT2bcVj7IstafP0aRC6HR4a5lndr
 """
 
-!pip install -r requirements.txt
+
 !pip install-r seaborn
 import os
 os.environ["AIPROXY_TOKEN"] = ""
