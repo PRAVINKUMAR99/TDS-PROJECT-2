@@ -11,6 +11,7 @@ Original file is located at
 # dependencies = [
 #   "httpx",
 #   "pandas",
+#   "seaborn"
 # ]
 # ///
 
