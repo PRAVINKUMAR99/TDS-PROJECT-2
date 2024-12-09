@@ -7,33 +7,18 @@ Original file is located at
     https://colab.research.google.com/drive/1JrGStT2bcVj7IstafP0aRC6HR4a5lndr
 """
 
-import subprocess
-import sys
-
-# Function to install missing packages
-def install(package):
-    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-
-# Try importing seaborn, if it fails, install it
 try:
     import seaborn as sns
 except ImportError:
-    print("Seaborn not found. Installing...")
-    install('seaborn')
-    import seaborn as sns
+    print("Seaborn is not available, falling back to Matplotlib")
+    sns = None  # This will allow the code to run without seaborn
 
-# Your other code follows
-import pandas as pd
-import matplotlib.pyplot as plt
-from google.colab import files
 
-# Example to test seaborn
-print("Seaborn imported successfully!")
 import os
 os.environ["AIPROXY_TOKEN"] = ""
 import os
 import pandas as pd
-import seaborn as sns
+#import seaborn as sns
 import matplotlib.pyplot as plt
 from google.colab import files
 
