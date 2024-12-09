@@ -7,11 +7,6 @@ Original file is located at
     https://colab.research.google.com/drive/1JrGStT2bcVj7IstafP0aRC6HR4a5lndr
 """
 
-try:
-    import seaborn as sns
-except ImportError:
-    print("Seaborn is not available, falling back to Matplotlib")
-    sns = None  # This will allow the code to run without seaborn
 
 
 import os
