@@ -20,7 +20,7 @@ import os
 import pandas as pd
 #import seaborn as sns
 #import matplotlib.pyplot as plt
-from google.colab import files
+#from google.colab import files
 
 # 1. Upload dataset file
 print("Please upload your dataset CSV file:")
