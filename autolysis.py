@@ -1,140 +1,122 @@
-# -*- coding: utf-8 -*-
-"""autolysis
-Automatically generated for uv execution.
-
-Original file is located at
-    [Add the location of the original script]
-"""
-
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#   "httpx",
 #   "pandas",
 #   "seaborn",
-#   "matplotlib"
+#   "matplotlib",
+#   "openai",
+#   "scikit-learn",
+#   "numpy",
 # ]
 # ///
 
 import os
 import pandas as pd
 import seaborn as sns
-import matplotlib
 import matplotlib.pyplot as plt
-import sys
+import numpy as np
+import openai
 
-# Set the AIPROXY_TOKEN environment variable (required for uv execution)
-os.environ["AIPROXY_TOKEN"] = ""
+# Set up OpenAI API
+openai.api_key = os.getenv("AIPROXY_TOKEN")
 
-# Set matplotlib backend to 'Agg' for headless environments
-matplotlib.use('Agg')
-
-# Function to get dataset path from the command-line argument
-def get_dataset_path():
-    if len(sys.argv) < 2:
-        print("No dataset file provided. Please specify the path to the dataset.")
-        sys.exit(1)
-    
-    dataset_path = sys.argv[1]
-    
-    if not os.path.isfile(dataset_path):
-        print(f"Error: The file {dataset_path} does not exist. Please check the file path.")
-        sys.exit(1)
-    
-    print(f"Dataset file selected: {dataset_path}")
-    return dataset_path
-
-# Function to load and analyze the dataset
-def analyze_dataset(dataset_path):
-    try:
-        dataset = pd.read_csv(dataset_path, encoding='ISO-8859-1')  # Adjust encoding if needed
-        print(f"Dataset loaded successfully with shape {dataset.shape}.")
-    except Exception as e:
-        print(f"Error loading dataset: {e}")
-        dataset = None
+# Function to load dataset
+def load_dataset(file_path):
+    dataset = pd.read_csv(file_path)
     return dataset
 
-# Function to perform basic analysis
-def perform_analysis(dataset):
-    # Get basic summary statistics
-    summary_stats = dataset.describe()
+# Function to get summary statistics
+def get_summary_statistics(dataset):
+    return dataset.describe()
 
-    # Check for missing values
-    missing_values = dataset.isnull().sum()
+# Function to count missing values
+def count_missing_values(dataset):
+    return dataset.isnull().sum()
 
-    # Create a correlation matrix
-    correlation_matrix = dataset.select_dtypes(exclude='object').corr()
-
-    # Visualize the Correlation Matrix using Seaborn and save to file
+# Function to create a correlation heatmap
+def plot_correlation_heatmap(dataset):
+    corr = dataset.corr()
     plt.figure(figsize=(10, 8))
-    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt='.2f')
-    plt.title('Correlation Matrix')
+    sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f", cbar=True)
+    plt.title('Correlation Heatmap')
     plt.tight_layout()
-    plt.savefig("correlation_matrix.png")  # Save the plot to a file
-    plt.close()  # Close the plot to avoid GUI-related issues
+    plt.savefig('correlation_heatmap.png')
 
-    return summary_stats, missing_values
+# Function to create a bar plot of missing values
+def plot_missing_values(dataset):
+    missing_values = dataset.isnull().sum()
+    missing_values = missing_values[missing_values > 0]
+    plt.figure(figsize=(8, 6))
+    missing_values.plot(kind='bar')
+    plt.title('Missing Values in Each Column')
+    plt.ylabel('Number of Missing Values')
+    plt.tight_layout()
+    plt.savefig('missing_values.png')
 
-# Function to create the README.md file with analysis insights
-def create_readme(dataset_path, summary_stats, missing_values):
-    insights = f"""
-    - The dataset has {dataset.shape[0]} rows and {dataset.shape[1]} columns.
-    - Summary Statistics:
-    {summary_stats.to_string()}
-    - Missing values by column:
-    {missing_values.to_string()}
+# Function to analyze data using LLM and summarize insights
+def analyze_with_llm(file_path, summary_stats, missing_values):
+    prompt = f"""
+    I have the following dataset {file_path}. Here are the summary statistics of the dataset:
+    {summary_stats}
+
+    And here are the missing values in the dataset:
+    {missing_values}
+
+    Please analyze the data and provide insights, suggestions for improvement, and potential implications.
     """
 
-    # Create the README.md file with analysis and insights
-    markdown_content = f"""
-# Analysis of {os.path.basename(dataset_path)}
+    response = openai.Completion.create(
+        model="gpt-4o-mini",
+        prompt=prompt,
+        max_tokens=500
+    )
 
-## Dataset Overview
-The dataset was loaded and analyzed dynamically. Below are the key findings:
+    return response['choices'][0]['text']
 
-- **Dataset Path**: `{dataset_path}`
-- **Shape**: {dataset.shape[0]} rows and {dataset.shape[1]} columns.
-
-## Analysis Highlights
-### Correlation Matrix
-The correlation matrix was analyzed to identify relationships between numerical features. A heatmap visualization has been generated:
-
-![Correlation Matrix](correlation_matrix.png)
-
-### Insights from the LLM
-The following insights were generated from the basic analysis:
-
-## Outlier Analysis
-Outliers were detected in the numerical columns using the IQR method. Further investigation may be necessary for columns with high deviation.
-
-## Next Steps
-Based on the analysis:
-1. Investigate features with strong correlations for potential predictive modeling.
-2. Address columns with significant outliers or missing data.
-3. Explore advanced techniques like clustering or anomaly detection to uncover deeper patterns.
-
----
-
-This README file summarizes the analysis. For further details, please refer to the dataset and visualizations.
-"""
-
+# Function to create README.md
+def create_readme(file_path, summary_stats, missing_values):
+    # Prepare the markdown content
+    insights = analyze_with_llm(file_path, summary_stats, missing_values)
     with open("README.md", "w") as f:
-        f.write(markdown_content)
+        f.write(f"# Data Analysis Report: {file_path}\n\n")
+        f.write(f"## Dataset Overview\n\n")
+        f.write(f"- Dataset file: {file_path}\n\n")
+        f.write(f"## Summary Statistics\n\n")
+        f.write(f"{summary_stats}\n\n")
+        f.write(f"## Missing Values\n\n")
+        f.write(f"{missing_values}\n\n")
+        f.write(f"## Insights\n\n")
+        f.write(insights)
+        f.write("\n\n")
+        f.write("## Visualizations\n")
+        f.write("### Correlation Heatmap\n")
+        f.write("![Correlation Heatmap](correlation_heatmap.png)\n\n")
+        f.write("### Missing Values\n")
+        f.write("![Missing Values](missing_values.png)\n\n")
 
-# Main execution
-def main():
-    # Get dataset path from command-line argument
-    dataset_path = get_dataset_path()
-
-    # Load and analyze the dataset
-    dataset = analyze_dataset(dataset_path)
+# Main function to run the analysis
+def main(dataset_path):
+    # Load the dataset
+    dataset = load_dataset(dataset_path)
     
-    # Perform analysis if dataset loaded successfully
-    if dataset is not None:
-        summary_stats, missing_values = perform_analysis(dataset)
-        create_readme(dataset_path, summary_stats, missing_values)
-        print("Analysis complete. Files generated: README.md, correlation_matrix.png.")
-    else:
-        print("Error: Dataset could not be loaded. Exiting...")
+    # Generate summary statistics and missing values
+    summary_stats = get_summary_statistics(dataset)
+    missing_values = count_missing_values(dataset)
+    
+    # Create visualizations
+    plot_correlation_heatmap(dataset)
+    plot_missing_values(dataset)
+    
+    # Create README.md report
+    create_readme(dataset_path, summary_stats, missing_values)
+    print(f"Analysis complete! Check the generated README.md and PNG files.")
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if len(sys.argv) != 2:
+        print("Usage: uv run autolysis.py <dataset.csv>")
+        sys.exit(1)
+
+    dataset_path = sys.argv[1]
+    main(dataset_path)
