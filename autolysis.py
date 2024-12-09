@@ -12,7 +12,7 @@ Original file is located at
 #   "httpx",
 #   "pandas",
 #   "seaborn",
-#   "google"
+#   "google.colab"
 # ]
 # ///
 
