@@ -26,7 +26,7 @@ for filename in uploaded.keys():
 
 # Load the dataset
 try:
-    dataset = pd.read_csv(dataset_path)
+    dataset = pd.read_csv(dataset_path, encoding='ISO-8859-1')
     print(f"Dataset loaded successfully with shape {dataset.shape}.")
 except Exception as e:
     print(f"Error loading dataset: {e}")
