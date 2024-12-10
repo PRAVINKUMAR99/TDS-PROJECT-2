@@ -1,4 +1,15 @@
-import os
+# /// script
+# requires-python = ">=3.9"
+# dependencies = [
+#   "pandas",
+#   "seaborn",
+#   "matplotlib",
+#   "numpy",
+#   "scipy",
+#   "openai",
+#   "sklearn",
+# ]
+# ///
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
