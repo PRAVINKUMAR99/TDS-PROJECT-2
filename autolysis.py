@@ -59,17 +59,50 @@ def perform_pca(dataset, n_components=2):
     return principal_components, explained_variance
 
 # Add Clustering (KMeans) to the dataset
-def cluster_data(dataset, output_file):
-    """
-    Applies KMeans clustering to the dataset and visualizes the clusters.
-    """
-    numeric_data = dataset.select_dtypes(include=[np.number]).dropna()
-    kmeans = KMeans(n_clusters=3, random_state=42)
+def cluster_data(dataset, output_plot):
+    # Check if the dataset has enough data
+    if dataset.isnull().any().any():
+        print("Dataset contains missing values. Please handle them before clustering.")
+        return
+
+    # Select relevant columns for clustering (assuming numerical columns for clustering)
+    numeric_data = dataset.select_dtypes(include=['float64', 'int64'])
+
+    # Check if there are any numerical columns to cluster
+    if numeric_data.empty:
+        print("No numerical data available for clustering.")
+        return
+
+    # Initialize KMeans with the number of clusters
+    num_clusters = 3  # Change this to the desired number of clusters
+    kmeans = KMeans(n_clusters=num_clusters, random_state=42)
+    
+    # Perform the clustering
     clusters = kmeans.fit_predict(numeric_data)
+
+    # Check if the length of clusters matches the length of the dataset
+    if len(clusters) != len(dataset):
+        print(f"Mismatch in the number of clusters ({len(clusters)}) and the dataset rows ({len(dataset)}).")
+        # Optionally, extend or slice the clusters to match the dataset length
+        if len(clusters) < len(dataset):
+            clusters = list(clusters) + [None] * (len(dataset) - len(clusters))  # Pad with None if fewer clusters
+        else:
+            clusters = clusters[:len(dataset)]  # Trim clusters if more than dataset rows
+
+    # Add the clusters to the dataset
     dataset["Cluster"] = clusters
-    sns.pairplot(dataset, hue="Cluster", palette="Set2")
-    plt.savefig(output_file, dpi=300)
-    plt.close()
+
+    # Visualize the clustering (assuming 2D for simplicity, modify based on your dataset)
+    plt.figure(figsize=(8, 6))
+    plt.scatter(dataset.iloc[:, 0], dataset.iloc[:, 1], c=clusters, cmap='viridis', marker='o')
+    plt.title('Clustering Visualization')
+    plt.xlabel(dataset.columns[0])
+    plt.ylabel(dataset.columns[1])
+    plt.colorbar(label='Cluster')
+    plt.savefig(output_plot)
+    plt.show()
+
+    print(f"Clustering complete. Plot saved to {output_plot}")
 
 # LLM Prompt: Create a context-aware query based on dataset
 def query_llm(prompt, max_tokens=300):
