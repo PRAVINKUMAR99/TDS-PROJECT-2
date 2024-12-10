@@ -7,9 +7,10 @@
 #   "numpy",
 #   "scipy",
 #   "openai",
-#   "sklearn",
+#   "scikit-learn",  # Changed to scikit-learn instead of sklearn
 # ]
 # ///
+
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
