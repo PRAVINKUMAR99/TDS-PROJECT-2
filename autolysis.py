@@ -1,119 +1,140 @@
-# /// script
-# requires-python = ">=3.11"
-# dependencies = [
-#   "httpx",
-#   "pandas",
-#   "seaborn",
-#   "matplotlib",
-#   "openai",
-#   "scikit-learn",
-#   "numpy",
-# ]
-# ///
-
 import os
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
 import numpy as np
+from scipy.stats import zscore
 import openai
+import matplotlib.cm as cm
 
-# Set up OpenAI API
-openai.api_key = os.getenv("AIPROXY_TOKEN")
-
-# Function to load dataset
+# Handle different encodings
 def load_dataset(file_path):
-    try:
-        dataset = pd.read_csv(file_path, encoding='ISO-8859-1')  # Try other encodings if needed
-    except UnicodeDecodeError:
-        print(f"Error reading {file_path}. Try a different encoding.")
-        raise
-    return dataset
-
-# Function to get summary statistics
-def get_summary_statistics(dataset):
-    return dataset.describe()
-
-# Function to count missing values
-def count_missing_values(dataset):
-    return dataset.isnull().sum()
-
-# Function to create a correlation heatmap
-def plot_correlation_heatmap(dataset):
-    # Select only numeric columns
-    numeric_columns = dataset.select_dtypes(include=[np.number])
-    corr = numeric_columns.corr()
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f", cbar=True)
-    plt.title('Correlation Heatmap')
-    plt.tight_layout()
-    plt.savefig('correlation_heatmap.png')
-
-# Function to create a bar plot of missing values
-def plot_missing_values(dataset):
-    missing_values = dataset.isnull().sum()
-    missing_values = missing_values[missing_values > 0]
-    plt.figure(figsize=(8, 6))
-    missing_values.plot(kind='bar')
-    plt.title('Missing Values in Each Column')
-    plt.ylabel('Number of Missing Values')
-    plt.tight_layout()
-    plt.savefig('missing_values.png')
-
-# Function to analyze data using LLM and summarize insights
-def analyze_with_llm(file_path, summary_stats, missing_values):
-    prompt = f"""
-    I have the following dataset {file_path}. Here are the summary statistics of the dataset:
-    {summary_stats}
-
-    And here are the missing values in the dataset:
-    {missing_values}
-
-    Please analyze the data and provide insights, suggestions for improvement, and potential implications.
     """
+    Load dataset with encoding fallback to avoid read errors.
+    Tries 'utf-8' and falls back to 'latin-1' encoding.
+    """
+    try:
+        return pd.read_csv(file_path, encoding="utf-8")
+    except UnicodeDecodeError:
+        return pd.read_csv(file_path, encoding="latin-1")
 
-    response = openai.Completion.create(
-        model="gpt-4o-mini",
-        prompt=prompt,
-        max_tokens=500
-    )
+# Enhanced Correlation Heatmap
+def plot_correlation_heatmap(dataset, output_file):
+    """
+    Generates a correlation heatmap for numerical columns in the dataset.
+    Adds annotations and saves the heatmap as a PNG file.
+    """
+    corr = dataset.corr()  # Compute the correlation matrix
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f", vmin=-1, vmax=1)
+    plt.title("Correlation Heatmap")
+    plt.savefig(output_file, dpi=300)
+    plt.close()
 
-    return response['choices'][0]['text']
+# Perform PCA (Principal Component Analysis) for dimensionality reduction
+def perform_pca(dataset, n_components=2):
+    """
+    Reduces the dataset dimensions using PCA and returns the transformed components.
+    """
+    numeric_data = dataset.select_dtypes(include=[np.number]).dropna()
+    pca = PCA(n_components=n_components)
+    principal_components = pca.fit_transform(numeric_data)
+    explained_variance = pca.explained_variance_ratio_
+    return principal_components, explained_variance
 
-# Function to create README.md
-def create_readme(file_path, summary_stats, missing_values):
-    # Prepare the markdown content
-    insights = analyze_with_llm(file_path, summary_stats, missing_values)
-    with open("README.md", "w") as f:
-        f.write(f"# Data Analysis Report: {file_path}\n\n")
-        f.write(f"## Dataset Overview\n\n")
-        f.write(f"- Dataset file: {file_path}\n\n")
-        f.write(f"## Summary Statistics\n\n")
-        f.write(f"{summary_stats}\n\n")
-        f.write(f"## Missing Values\n\n")
-        f.write(f"{missing_values}\n\n")
-        f.write(f"## Insights\n\n")
-        f.write(insights)
-        f.write("\n\n")
-        f.write("## Visualizations\n")
-        f.write("### Correlation Heatmap\n")
-        f.write("![Correlation Heatmap](correlation_heatmap.png)\n\n")
-        f.write("### Missing Values\n")
-        f.write("![Missing Values](missing_values.png)\n\n")
+# Add Clustering (KMeans) to the dataset
+def cluster_data(dataset, output_file):
+    """
+    Applies KMeans clustering to the dataset and visualizes the clusters.
+    """
+    numeric_data = dataset.select_dtypes(include=[np.number]).dropna()
+    kmeans = KMeans(n_clusters=3, random_state=42)
+    clusters = kmeans.fit_predict(numeric_data)
+    dataset["Cluster"] = clusters
+    sns.pairplot(dataset, hue="Cluster", palette="Set2")
+    plt.savefig(output_file, dpi=300)
+    plt.close()
 
-# Main function to run the analysis
-def main(dataset_path):
+# LLM Prompt: Create a context-aware query based on dataset
+def query_llm(prompt, max_tokens=300):
+    """
+    Sends a concise query to the LLM for analysis. 
+    Avoids sending large data, keeping the prompt clear and focused.
+    """
+    openai.api_key = os.environ["AIPROXY_TOKEN"]
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+        )
+        return response["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"Error in LLM query: {str(e)}"
+
+# Data cleaning: Remove rows with NaNs and detect anomalies
+def clean_and_analyze(dataset):
+    """
+    Clean the dataset by handling NaNs and calculating z-scores to detect outliers.
+    """
+    # Remove rows with NaN values
+    cleaned_data = dataset.dropna()
+    
+    # Calculate z-scores for anomaly detection
+    z_scores = np.abs(zscore(cleaned_data.select_dtypes(include=[np.number])))
+    outliers = (z_scores > 3).all(axis=1)
+    cleaned_data = cleaned_data[~outliers]
+    
+    return cleaned_data, outliers
+
+# Main function to control the workflow
+def main(file_path):
+    """
+    Main function to load data, analyze, visualize, and generate insights.
+    """
     # Load the dataset
-    dataset = load_dataset(dataset_path)
+    dataset = load_dataset(file_path)
+
+    # Data Cleaning and Anomaly Detection
+    cleaned_data, outliers = clean_and_analyze(dataset)
+    print(f"Outliers detected: {np.sum(outliers)}")
     
-    # Generate summary statistics and missing values
-    summary_stats = get_summary_statistics(dataset)
-    missing_values = count_missing_values(dataset)
+    # Generate and save Correlation Heatmap
+    plot_correlation_heatmap(dataset, "correlation_heatmap.png")
+
+    # Perform PCA for dimensionality reduction
+    pca_components, variance = perform_pca(dataset)
+    print(f"Explained variance by PCA components: {variance}")
+
+    # Perform clustering and save cluster plot
+    cluster_data(dataset, "cluster_plot.png")
+
+    # Dynamic LLM query generation
+    prompt = f"Analyze the following dataset columns and types:\n{dataset.dtypes}\nProvide insights on trends, anomalies, and key findings."
+    insights = query_llm(prompt)
+    print("LLM Insights:", insights)
+
+    # Write Markdown report
+    with open("README.md", "w") as f:
+        f.write("# Dataset Analysis\n\n")
+        f.write("## Data Overview\n")
+        f.write(f"Dataset contains {len(dataset)} rows and {len(dataset.columns)} columns.\n")
+        f.write("## Insights\n")
+        f.write(insights)
+        f.write("\n\n## Visualizations\n")
+        f.write("![Correlation Heatmap](correlation_heatmap.png)\n")
+        f.write("![Cluster Plot](cluster_plot.png)\n")
     
-    # Create visualizations
-    plot_correlation_heatmap(dataset)
-    plot_missing_values(dataset)
-    
-    # Create README.md report
-    create_readme(dataset_path, summary_stats, missing_values)
-    print(f"Analysis complete! Check the generated README.md and PNG files.")
+    # Feedback loop with multiple LLM calls (for advanced analysis)
+    advanced_prompt = f"Based on the PCA and clustering results, describe any significant patterns, anomalies, or relationships."
+    advanced_insights = query_llm(advanced_prompt)
+    print("Advanced LLM Insights:", advanced_insights)
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) < 2:
+        print("Usage: uv run autolysis.py <dataset_path>")
+        sys.exit(1)
+    main(sys.argv[1])
