@@ -38,7 +38,7 @@ def plot_correlation_heatmap(dataset, output_file):
     Generates a correlation heatmap for numerical columns in the dataset.
     Adds annotations and saves the heatmap as a PNG file.
     """
-    corr = dataset.selct_dtypes(exclude="object").corr()  # Compute the correlation matrix
+    corr = dataset.select_dtypes(exclude="object").corr()  # Compute the correlation matrix
     plt.figure(figsize=(10, 8))
     sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f", vmin=-1, vmax=1)
     plt.title("Correlation Heatmap")
