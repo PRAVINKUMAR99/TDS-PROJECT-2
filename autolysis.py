@@ -7,9 +7,11 @@
 #   "numpy",
 #   "scipy",
 #   "openai",
-#   "scikit-learn",  # Changed to scikit-learn instead of sklearn
+#   "scikit-learn",
+#   "ipykernel",  # Added ipykernel
 # ]
 # ///
+
 
 import pandas as pd
 import seaborn as sns
