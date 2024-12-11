@@ -4,7 +4,8 @@
 #   "pandas",
 #   "matplotlib",
 #   "seaborn",
-#   "openai"
+#   "openai",
+#   "rich"
 # ]
 # ///
 
@@ -14,13 +15,17 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import openai
+from rich.console import Console
+
+# Initialize console for rich logging
+console = Console()
 
 # Configure OpenAI
 openai.api_key = os.environ.get("AIPROXY_TOKEN")
 
 def analyze_and_visualize(filename):
     try:
-        print("Starting analysis for file:", filename)
+        console.log(f"[bold blue]Starting analysis for file:[/] {filename}")
         
         # Attempt to load dataset with flexible delimiters and encoding
         try:
@@ -28,15 +33,15 @@ def analyze_and_visualize(filename):
         except UnicodeDecodeError:
             data = pd.read_csv(filename, encoding="ISO-8859-1")
         except Exception as e:
-            print(f"Default CSV load failed, attempting alternative delimiters: {e}")
+            console.log(f"[yellow]Default CSV load failed, attempting alternative delimiters:[/] {e}")
             data = pd.read_csv(filename, delimiter=';', encoding="utf-8")
 
         # Handle edge cases for empty datasets
         if data.empty:
-            print("The dataset is empty. Exiting analysis.")
+            console.log("[red]The dataset is empty. Exiting analysis.")
             return
 
-        print("Dataset successfully loaded. Performing initial analysis...")
+        console.log("[green]Dataset successfully loaded. Performing initial analysis...")
 
         # Initial dataset overview
         summary = {
@@ -47,7 +52,7 @@ def analyze_and_visualize(filename):
         }
         
         # Ask LLM for insights on the dataset
-        print("Requesting insights from LLM...")
+        console.log("[cyan]Requesting insights from LLM...")
         llm_response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
@@ -56,12 +61,12 @@ def analyze_and_visualize(filename):
             ]
         )
         insights = llm_response.choices[0].message['content']
-        print("Insights received from LLM:", insights)
+        console.log("[green]Insights received from LLM:[/]", insights)
 
         # Perform correlation analysis if numeric data exists
         numeric_data = data.select_dtypes(include='number')
         if not numeric_data.empty:
-            print("Generating correlation matrix...")
+            console.log("[cyan]Generating correlation matrix...")
             correlation_matrix = numeric_data.corr()
             plt.figure(figsize=(10, 8))
             sns.heatmap(correlation_matrix, annot=True, cmap="coolwarm")
@@ -71,13 +76,13 @@ def analyze_and_visualize(filename):
 
         # Generate a cluster plot if there are at least two numeric columns
         if numeric_data.shape[1] > 1:
-            print("Generating pair plot...")
+            console.log("[cyan]Generating pair plot...")
             sns.pairplot(numeric_data)
             plt.savefig("pairplot.png")
             plt.close()
 
         # Generate a README.md file with LLM narration
-        print("Requesting story generation from LLM...")
+        console.log("[cyan]Requesting story generation from LLM...")
         story_prompt = (
             f"Using the analysis and visualizations (e.g., correlation matrix and pair plots), "
             f"generate a Markdown report. Include a summary of the dataset, the analyses performed, insights discovered, "
@@ -92,24 +97,24 @@ def analyze_and_visualize(filename):
             ]
         )
 
-        print("Story generation complete. Writing README.md...")
+        console.log("[green]Story generation complete. Writing README.md...")
         with open("README.md", "w") as f:
             f.write(story_response.choices[0].message['content'])
             f.write("\n![Correlation Matrix](correlation_matrix.png)\n")
             if numeric_data.shape[1] > 1:
                 f.write("![Pair Plot](pairplot.png)\n")
 
-        print("Analysis complete. Output saved in README.md and PNG files.")
+        console.log("[bold green]Analysis complete. Output saved in README.md and PNG files.")
 
     except Exception as e:
-        print(f"An error occurred during analysis: {e}")
+        console.log(f"[red]An error occurred during analysis:[/] {e}")
 
 if _name_ == "_main_":
-    print("Starting autolysis script...")
+    console.log("[bold blue]Starting autolysis script...")
     if len(sys.argv) != 2:
-        print("Usage: uv run autolysis.py <dataset.csv>")
+        console.log("[red]Usage: uv run autolysis.py <dataset.csv>")
         sys.exit(1)
 
     dataset_file = sys.argv[1]
-    print(f"Processing dataset file: {dataset_file}")
+    console.log(f"[bold yellow]Processing dataset file:[/] {dataset_file}")
     analyze_and_visualize(dataset_file)
