@@ -222,7 +222,7 @@ def analyze_and_visualize(filename):
     except Exception as e:
         console.log(f"[red]An error occurred:[/] {e}")
 
-if __name__ == "__main__":
+if _name_ == "_main_":
     console.log("[bold blue]Starting autolysis script...")
     if len(sys.argv) != 2:
         console.log("[red]Usage: uv run autolysis.py <dataset.csv>")
@@ -231,4 +231,3 @@ if __name__ == "__main__":
     dataset_file = sys.argv[1]
     console.log(f"[bold yellow]Processing dataset file:[/] {dataset_file}")
     analyze_and_visualize(dataset_file)
-
