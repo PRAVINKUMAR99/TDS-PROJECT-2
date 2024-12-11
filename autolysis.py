@@ -20,6 +20,7 @@ import openai
 from rich.console import Console
 from sklearn.ensemble import IsolationForest
 from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
 # Initialize console for rich logging
@@ -64,6 +65,29 @@ def perform_clustering(data):
     data['Cluster'] = kmeans.fit_predict(scaled_data)
     return data
 
+def perform_pca(data):
+    """Perform Principal Component Analysis (PCA) on numeric data."""
+    numeric_data = data.select_dtypes(include='number')
+    if numeric_data.shape[1] < 2:
+        return None
+
+    console.log("[cyan]Performing PCA...")
+    scaler = StandardScaler()
+    scaled_data = scaler.fit_transform(numeric_data)
+    pca = PCA(n_components=2)
+    components = pca.fit_transform(scaled_data)
+    data['PCA1'] = components[:, 0]
+    data['PCA2'] = components[:, 1]
+
+    # Scatter plot for PCA
+    plt.figure(figsize=(8, 6))
+    sns.scatterplot(x='PCA1', y='PCA2', hue='Cluster', data=data, palette='tab10')
+    plt.title("PCA Scatterplot")
+    plt.savefig("pca_scatterplot.png")
+    plt.close()
+
+    return data
+
 def visualize_data(data):
     """Generate advanced visualizations."""
     numeric_data = data.select_dtypes(include='number')
@@ -74,6 +98,19 @@ def visualize_data(data):
         sns.heatmap(numeric_data.corr(), annot=True, cmap="coolwarm")
         plt.title("Correlation Heatmap")
         plt.savefig("correlation_heatmap.png")
+        plt.close()
+
+        console.log("[cyan]Generating boxplot...")
+        plt.figure(figsize=(12, 6))
+        sns.boxplot(data=numeric_data)
+        plt.title("Boxplot of Numeric Data")
+        plt.savefig("boxplot.png")
+        plt.close()
+
+        console.log("[cyan]Generating histograms...")
+        numeric_data.hist(figsize=(12, 10), bins=20, color='teal')
+        plt.suptitle("Histograms of Numeric Data")
+        plt.savefig("histograms.png")
         plt.close()
 
     if 'Cluster' in data.columns:
@@ -151,6 +188,7 @@ def analyze_and_visualize(filename):
         # Detect outliers and perform clustering
         data = detect_outliers(data)
         data = perform_clustering(data)
+        data = perform_pca(data)
 
         # Visualize data
         visualize_data(data)
@@ -164,14 +202,20 @@ def analyze_and_visualize(filename):
             visual_insights.append(request_visual_insights(encode_image("correlation_heatmap.png"), "correlation heatmap"))
         if os.path.exists("cluster_pairplot.png"):
             visual_insights.append(request_visual_insights(encode_image("cluster_pairplot.png"), "cluster pairplot"))
+        if os.path.exists("pca_scatterplot.png"):
+            visual_insights.append(request_visual_insights(encode_image("pca_scatterplot.png"), "PCA scatterplot"))
 
         # Generate Markdown story
         story = request_story_generation(summary, insights, " ".join(visual_insights))
         with open("README.md", "w") as f:
             f.write(story)
             f.write("\n![Correlation Heatmap](correlation_heatmap.png)\n")
+            f.write("![Boxplot](boxplot.png)\n")
+            f.write("![Histograms](histograms.png)\n")
             if 'Cluster' in data.columns:
                 f.write("![Cluster Pairplot](cluster_pairplot.png)\n")
+            if os.path.exists("pca_scatterplot.png"):
+                f.write("![PCA Scatterplot](pca_scatterplot.png)\n")
 
         console.log("[bold green]Analysis complete. Outputs saved.")
 
@@ -187,3 +231,4 @@ if __name__ == "__main__":
     dataset_file = sys.argv[1]
     console.log(f"[bold yellow]Processing dataset file:[/] {dataset_file}")
     analyze_and_visualize(dataset_file)
+
