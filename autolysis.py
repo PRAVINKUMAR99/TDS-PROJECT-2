@@ -4,8 +4,7 @@
 #   "pandas",
 #   "matplotlib",
 #   "seaborn",
-#   "openai",
-#   "os",
+#   "openai"
 # ]
 # ///
 
