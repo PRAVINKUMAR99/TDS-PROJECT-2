@@ -20,6 +20,8 @@ openai.api_key = os.environ.get("AIPROXY_TOKEN")
 
 def analyze_and_visualize(filename):
     try:
+        print("Starting analysis for file:", filename)
+        
         # Attempt to load dataset with flexible delimiters and encoding
         try:
             data = pd.read_csv(filename, encoding="utf-8")
@@ -34,6 +36,8 @@ def analyze_and_visualize(filename):
             print("The dataset is empty. Exiting analysis.")
             return
 
+        print("Dataset successfully loaded. Performing initial analysis...")
+
         # Initial dataset overview
         summary = {
             "columns": data.columns.tolist(),
@@ -43,6 +47,7 @@ def analyze_and_visualize(filename):
         }
         
         # Ask LLM for insights on the dataset
+        print("Requesting insights from LLM...")
         llm_response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
@@ -51,10 +56,12 @@ def analyze_and_visualize(filename):
             ]
         )
         insights = llm_response.choices[0].message['content']
+        print("Insights received from LLM:", insights)
 
         # Perform correlation analysis if numeric data exists
         numeric_data = data.select_dtypes(include='number')
         if not numeric_data.empty:
+            print("Generating correlation matrix...")
             correlation_matrix = numeric_data.corr()
             plt.figure(figsize=(10, 8))
             sns.heatmap(correlation_matrix, annot=True, cmap="coolwarm")
@@ -64,11 +71,13 @@ def analyze_and_visualize(filename):
 
         # Generate a cluster plot if there are at least two numeric columns
         if numeric_data.shape[1] > 1:
+            print("Generating pair plot...")
             sns.pairplot(numeric_data)
             plt.savefig("pairplot.png")
             plt.close()
 
         # Generate a README.md file with LLM narration
+        print("Requesting story generation from LLM...")
         story_prompt = (
             f"Using the analysis and visualizations (e.g., correlation matrix and pair plots), "
             f"generate a Markdown report. Include a summary of the dataset, the analyses performed, insights discovered, "
@@ -83,6 +92,7 @@ def analyze_and_visualize(filename):
             ]
         )
 
+        print("Story generation complete. Writing README.md...")
         with open("README.md", "w") as f:
             f.write(story_response.choices[0].message['content'])
             f.write("\n![Correlation Matrix](correlation_matrix.png)\n")
@@ -92,12 +102,14 @@ def analyze_and_visualize(filename):
         print("Analysis complete. Output saved in README.md and PNG files.")
 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"An error occurred during analysis: {e}")
 
 if _name_ == "_main_":
+    print("Starting autolysis script...")
     if len(sys.argv) != 2:
         print("Usage: uv run autolysis.py <dataset.csv>")
         sys.exit(1)
 
     dataset_file = sys.argv[1]
+    print(f"Processing dataset file: {dataset_file}")
     analyze_and_visualize(dataset_file)
