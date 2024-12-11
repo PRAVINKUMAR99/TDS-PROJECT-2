@@ -48,12 +48,14 @@ def load_data(file_path):
         sys.exit(1)
 
 def summarize_data(df):
-    """Generate a summary of the dataset."""
+    """Generate a summary of the dataset with serializable data types."""
     summary = {
         "shape": df.shape,
-        "columns": df.dtypes.to_dict(),
+        "columns": {col: str(dtype) for col, dtype in df.dtypes.items()},
         "missing_values": df.isnull().sum().to_dict(),
-        "summary_stats": df.describe(include='all').to_dict()
+        "summary_stats": df.describe(include='all').applymap(
+            lambda x: x.item() if isinstance(x, (np.generic, np.number)) else x
+        ).to_dict()
     }
     return summary
 
