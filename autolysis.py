@@ -12,6 +12,7 @@
 
 import os
 import sys
+import base64
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -81,6 +82,11 @@ def visualize_data(data):
         plt.savefig("cluster_pairplot.png")
         plt.close()
 
+def encode_image(filepath):
+    """Encode an image to base64 for LLM integration."""
+    with open(filepath, "rb") as f:
+        return base64.b64encode(f.read()).decode("utf-8")
+
 def request_llm_insights(summary):
     """Request insights from LLM based on summary statistics."""
     console.log("[cyan]Requesting insights from LLM...")
@@ -93,12 +99,26 @@ def request_llm_insights(summary):
     )
     return llm_response.choices[0].message['content']
 
-def request_story_generation(summary, insights):
+def request_visual_insights(image_data, description):
+    """Request LLM to interpret visualizations."""
+    console.log("[cyan]Requesting visualization insights from LLM...")
+    llm_response = openai.ChatCompletion.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are an expert data visualization analyst."},
+            {"role": "user", "content": f"Here is an image of {description}. Analyze its insights."},
+            {"role": "user", "content": image_data}
+        ]
+    )
+    return llm_response.choices[0].message['content']
+
+def request_story_generation(summary, insights, visual_insights):
     """Generate a Markdown story with LLM."""
     console.log("[cyan]Requesting story generation from LLM...")
     story_prompt = (
         f"Using the analysis and visualizations, generate a Markdown report. "
-        f"Include dataset summary, analyses, insights, and implications. Dataset overview: {summary}. Insights: {insights}."
+        f"Include dataset summary, analyses, insights, and implications. Dataset overview: {summary}. "
+        f"Insights: {insights}. Visualization Insights: {visual_insights}."
     )
 
     story_response = openai.ChatCompletion.create(
@@ -138,8 +158,15 @@ def analyze_and_visualize(filename):
         # Request insights from LLM
         insights = request_llm_insights(summary)
 
+        # Encode visualizations and request LLM insights
+        visual_insights = []
+        if os.path.exists("correlation_heatmap.png"):
+            visual_insights.append(request_visual_insights(encode_image("correlation_heatmap.png"), "correlation heatmap"))
+        if os.path.exists("cluster_pairplot.png"):
+            visual_insights.append(request_visual_insights(encode_image("cluster_pairplot.png"), "cluster pairplot"))
+
         # Generate Markdown story
-        story = request_story_generation(summary, insights)
+        story = request_story_generation(summary, insights, " ".join(visual_insights))
         with open("README.md", "w") as f:
             f.write(story)
             f.write("\n![Correlation Heatmap](correlation_heatmap.png)\n")
@@ -151,7 +178,7 @@ def analyze_and_visualize(filename):
     except Exception as e:
         console.log(f"[red]An error occurred:[/] {e}")
 
-if __name__ == "__main__":
+if _name_ == "_main_":
     console.log("[bold blue]Starting autolysis script...")
     if len(sys.argv) != 2:
         console.log("[red]Usage: uv run autolysis.py <dataset.csv>")
