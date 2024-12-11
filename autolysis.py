@@ -101,3 +101,6 @@ if _name_ == "_main_":
 
     dataset_file = sys.argv[1]
     analyze_and_visualize(dataset_file)
+
+    dataset_file = sys.argv[1]
+    analyze_and_visualize(dataset_file)
