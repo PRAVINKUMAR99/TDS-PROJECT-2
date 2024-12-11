@@ -1,187 +1,187 @@
 # /// script
-# requires-python = ">=3.9"
+# requires-python = ">=3.11"
 # dependencies = [
 #   "pandas",
-#   "seaborn",
 #   "matplotlib",
-#   "numpy",
-#   "scipy",
+#   "seaborn",
 #   "openai",
-#   "scikit-learn",
-#   "ipykernel",  # Added ipykernel
+#   "numpy",
+#   "python-dotenv"
 # ]
 # ///
 
 import os
+import sys
 import pandas as pd
+import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
-from sklearn.cluster import KMeans
-import numpy as np
-from scipy.stats import zscore
+from dotenv import load_dotenv
+import json
+from concurrent.futures import ThreadPoolExecutor
+
+# Load environment variables
+load_dotenv()
+AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN")
+
+if not AIPROXY_TOKEN:
+    print("Error: AIPROXY_TOKEN environment variable is not set.")
+    sys.exit(1)
+
 import openai
-import matplotlib.cm as cm
+openai.api_key = AIPROXY_TOKEN
 
-# Handle different encodings
-def load_dataset(file_path):
-    """
-    Load dataset with encoding fallback to avoid read errors.
-    Tries 'utf-8' and falls back to 'latin-1' encoding.
-    """
+def load_data(file_path):
+    """Load the dataset from the provided file path."""
     try:
-        return pd.read_csv(file_path, encoding="utf-8")
-    except UnicodeDecodeError:
-        return pd.read_csv(file_path, encoding="latin-1")
-
-# Enhanced Correlation Heatmap
-def plot_correlation_heatmap(dataset, output_file):
-    """
-    Generates a correlation heatmap for numerical columns in the dataset.
-    Adds annotations and saves the heatmap as a PNG file.
-    """
-    corr = dataset.select_dtypes(exclude="object").corr()  # Compute the correlation matrix
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f", vmin=-1, vmax=1)
-    plt.title("Correlation Heatmap")
-    plt.savefig(output_file, dpi=300)
-    plt.close()
-
-# Perform PCA (Principal Component Analysis) for dimensionality reduction
-def perform_pca(dataset, n_components=2):
-    """
-    Reduces the dataset dimensions using PCA and returns the transformed components.
-    """
-    numeric_data = dataset.select_dtypes(include=[np.number]).dropna()
-    pca = PCA(n_components=n_components)
-    principal_components = pca.fit_transform(numeric_data)
-    explained_variance = pca.explained_variance_ratio_
-    return principal_components, explained_variance
-
-# Add Clustering (KMeans) to the dataset
-def cluster_data(dataset, output_plot):
-    # Check if the dataset has enough data
-    if dataset.isnull().any().any():
-        print("Dataset contains missing values. Please handle them before clustering.")
-        return
-
-    # Select relevant columns for clustering (assuming numerical columns for clustering)
-    numeric_data = dataset.select_dtypes(include=['float64', 'int64'])
-
-    # Check if there are any numerical columns to cluster
-    if numeric_data.empty:
-        print("No numerical data available for clustering.")
-        return
-
-    # Initialize KMeans with the number of clusters
-    num_clusters = 3  # Change this to the desired number of clusters
-    kmeans = KMeans(n_clusters=num_clusters, random_state=42)
-    
-    # Perform the clustering
-    clusters = kmeans.fit_predict(numeric_data)
-
-    # Check if the length of clusters matches the length of the dataset
-    if len(clusters) != len(dataset):
-        print(f"Mismatch in the number of clusters ({len(clusters)}) and the dataset rows ({len(dataset)}).")
-        # Optionally, extend or slice the clusters to match the dataset length
-        if len(clusters) < len(dataset):
-            clusters = list(clusters) + [None] * (len(dataset) - len(clusters))  # Pad with None if fewer clusters
+        if file_path.endswith('.csv'):
+            df = pd.read_csv(file_path)
+        elif file_path.endswith('.xlsx'):
+            df = pd.read_excel(file_path)
+        elif file_path.endswith('.json'):
+            df = pd.read_json(file_path)
         else:
-            clusters = clusters[:len(dataset)]  # Trim clusters if more than dataset rows
+            raise ValueError("Unsupported file format. Please provide a .csv, .xlsx, or .json file.")
+        return df
+    except Exception as e:
+        print(f"Error loading file: {e}")
+        sys.exit(1)
 
-    # Add the clusters to the dataset
-    dataset["Cluster"] = clusters
+def summarize_data(df):
+    """Generate a summary of the dataset."""
+    summary = {
+        "shape": df.shape,
+        "columns": df.dtypes.to_dict(),
+        "missing_values": df.isnull().sum().to_dict(),
+        "summary_stats": df.describe(include='all').to_dict()
+    }
+    return summary
 
-    # Visualize the clustering (assuming 2D for simplicity, modify based on your dataset)
-    plt.figure(figsize=(8, 6))
-    plt.scatter(dataset.iloc[:, 0], dataset.iloc[:, 1], c=clusters, cmap='viridis', marker='o')
-    plt.title('Clustering Visualization')
-    plt.xlabel(dataset.columns[0])
-    plt.ylabel(dataset.columns[1])
-    plt.colorbar(label='Cluster')
-    plt.savefig(output_plot)
-    plt.show()
+def save_plot(output_dir, filename, plot_func):
+    """Save a plot using the provided plotting function."""
+    path = os.path.join(output_dir, filename)
+    try:
+        plot_func()
+        plt.savefig(path)
+        plt.close()
+        return filename
+    except Exception as e:
+        print(f"Error generating plot {filename}: {e}")
+        return None
 
-    print(f"Clustering complete. Plot saved to {output_plot}")
+def generate_visualizations(df, output_dir):
+    """Create visualizations for the dataset."""
+    visualization_paths = []
 
-# LLM Prompt: Create a context-aware query based on dataset
-def query_llm(prompt, max_tokens=300):
-    """
-    Sends a concise query to the LLM for analysis. 
-    Avoids sending large data, keeping the prompt clear and focused.
-    """
-    openai.api_key = os.environ["AIPROXY_TOKEN"]
+    def create_corr_heatmap():
+        if df.select_dtypes(include=[np.number]).shape[1] > 1:
+            corr = df.corr()
+            plt.figure(figsize=(10, 8))
+            sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm")
+            plt.title("Correlation Heatmap")
+
+    def create_distribution_plot(col):
+        plt.figure(figsize=(8, 6))
+        sns.histplot(df[col].dropna(), kde=True, bins=30, color="blue")
+        plt.title(f"Distribution of {col}")
+
+    def create_frequency_plot(col):
+        plt.figure(figsize=(8, 6))
+        sns.countplot(y=df[col], order=df[col].value_counts().index, palette="pastel")
+        plt.title(f"Frequency of {col}")
+
+    with ThreadPoolExecutor() as executor:
+        # Correlation heatmap
+        future = executor.submit(save_plot, output_dir, "correlation_heatmap.png", create_corr_heatmap)
+        visualization_paths.append(future.result())
+
+        # Numeric column distributions
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        for col in numeric_cols:
+            future = executor.submit(save_plot, output_dir, f"distribution_{col}.png", lambda: create_distribution_plot(col))
+            visualization_paths.append(future.result())
+
+        # Categorical column visualizations
+        categorical_cols = df.select_dtypes(include=['object', 'category']).columns
+        for col in categorical_cols:
+            future = executor.submit(save_plot, output_dir, f"frequency_{col}.png", lambda: create_frequency_plot(col))
+            visualization_paths.append(future.result())
+
+    return [path for path in visualization_paths if path]
+
+def ask_llm(prompt):
+    """Send a prompt to the LLM and retrieve the response."""
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=max_tokens,
+            model="gpt-4",  # Using a powerful model for robust outputs
+            messages=[
+                {"role": "system", "content": "You are a data analysis assistant."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=1000
         )
-        return response["choices"][0]["message"]["content"]
+        return response["choices"][0]["message"]["content"].strip()
     except Exception as e:
-        return f"Error in LLM query: {str(e)}"
+        print(f"Error communicating with LLM: {e}")
+        return "Error generating narrative."
 
-# Data cleaning: Remove rows with NaNs and detect anomalies
-def clean_and_analyze(dataset):
-    """
-    Clean the dataset by handling NaNs and calculating z-scores to detect outliers.
-    """
-    # Remove rows with NaN values
-    cleaned_data = dataset.dropna()
-    
-    # Calculate z-scores for anomaly detection
-    z_scores = np.abs(zscore(cleaned_data.select_dtypes(include=[np.number])))
-    outliers = (z_scores > 3).all(axis=1)
-    cleaned_data = cleaned_data[~outliers]
-    
-    return cleaned_data, outliers
+def narrate_story(summary, visualizations):
+    """Generate a narrative based on the dataset summary and visualizations."""
+    prompt = (
+        """Analyze the following dataset summary and visualizations. "
+        "Provide a comprehensive analysis, including key insights, statistical findings, and actionable conclusions."""
+        f"\n\nDataset Summary:\n{json.dumps(summary, indent=2)}"
+        f"\n\nVisualizations:\n{', '.join(visualizations)}"
+    )
+    return ask_llm(prompt)
 
-# Main function to control the workflow
-def main(file_path):
-    """
-    Main function to load data, analyze, visualize, and generate insights.
-    """
-    # Load the dataset
-    dataset = load_dataset(file_path)
+def write_readme(content, output_dir):
+    """Write the analysis report to a README.md file."""
+    readme_path = os.path.join(output_dir, "README.md")
+    try:
+        with open(readme_path, "w") as f:
+            f.write(content)
+        return readme_path
+    except Exception as e:
+        print(f"Error writing README: {e}")
+        return None
 
-    # Data Cleaning and Anomaly Detection
-    cleaned_data, outliers = clean_and_analyze(dataset)
-    print(f"Outliers detected: {np.sum(outliers)}")
-    
-    # Generate and save Correlation Heatmap
-    plot_correlation_heatmap(dataset, "correlation_heatmap.png")
+def main():
+    """Main function to orchestrate the analysis process."""
+    if len(sys.argv) != 2:
+        print("Usage: uv run autolysis.py <dataset>\nSupported formats: .csv, .xlsx, .json")
+        sys.exit(1)
 
-    # Perform PCA for dimensionality reduction
-    pca_components, variance = perform_pca(dataset)
-    print(f"Explained variance by PCA components: {variance}")
+    file_path = sys.argv[1]
+    output_dir = os.path.dirname(file_path)
 
-    # Perform clustering and save cluster plot
-    cluster_data(dataset, "cluster_plot.png")
+    # Load and summarize data
+    df = load_data(file_path)
+    summary = summarize_data(df)
 
-    # Dynamic LLM query generation
-    prompt = f"Analyze the following dataset columns and types:\n{dataset.dtypes}\nProvide insights on trends, anomalies, and key findings."
-    insights = query_llm(prompt)
-    print("LLM Insights:", insights)
+    # Generate visualizations
+    visualizations = generate_visualizations(df, output_dir)
 
-    # Write Markdown report
-    with open("README.md", "w") as f:
-        f.write("# Dataset Analysis\n\n")
-        f.write("## Data Overview\n")
-        f.write(f"Dataset contains {len(dataset)} rows and {len(dataset.columns)} columns.\n")
-        f.write("## Insights\n")
-        f.write(insights)
-        f.write("\n\n## Visualizations\n")
-        f.write("![Correlation Heatmap](correlation_heatmap.png)\n")
-        f.write("![Cluster Plot](cluster_plot.png)\n")
-    
-    # Feedback loop with multiple LLM calls (for advanced analysis)
-    advanced_prompt = f"Based on the PCA and clustering results, describe any significant patterns, anomalies, or relationships."
-    advanced_insights = query_llm(advanced_prompt)
-    print("Advanced LLM Insights:", advanced_insights)
+    # Generate narrative
+    story = narrate_story(summary, visualizations)
+
+    # Compile README content
+    readme_content = (
+        "# Analysis Report\n\n"
+        "## Dataset Summary\n\n"
+        f"```json\n{json.dumps(summary, indent=2)}\n```\n\n"
+        "## Visualizations\n\n"
+        + "\n".join([f"![{viz}]({viz})" for viz in visualizations]) +
+        "\n\n## Story\n\n"
+        f"{story}"
+    )
+
+    # Write README
+    readme_path = write_readme(readme_content, output_dir)
+    if readme_path:
+        print(f"Analysis complete. Results saved in {output_dir}.")
+    else:
+        print("Analysis complete, but failed to save the README file.")
 
 if __name__ == "__main__":
-    import sys
-    if len(sys.argv) < 2:
-        print("Usage: uv run autolysis.py <dataset_path>")
-        sys.exit(1)
-    main(sys.argv[1])  
+    main()
