@@ -109,7 +109,7 @@ def analyze_and_visualize(filename):
     except Exception as e:
         console.log(f"[red]An error occurred during analysis:[/] {e}")
 
-if _name_ == "_main_":
+if __name__ == "_main_":
     console.log("[bold blue]Starting autolysis script...")
     if len(sys.argv) != 2:
         console.log("[red]Usage: uv run autolysis.py <dataset.csv>")
