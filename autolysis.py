@@ -40,14 +40,23 @@ def load_dataset(filename):
         console.log(f"[yellow]Fallback to alternative delimiters:[/] {e}")
         return pd.read_csv(filename, delimiter=';', encoding="utf-8")
 
+def clean_data(data):
+    """Handle missing or invalid data."""
+    console.log("[cyan]Cleaning data...")
+    data = data.drop_duplicates()
+    data = data.dropna(how='all')
+    data.fillna(data.median(numeric_only=True), inplace=True)
+    return data
+
 def detect_outliers(data):
     """Detect outliers using Isolation Forest."""
     numeric_data = data.select_dtypes(include='number')
     if numeric_data.empty:
-        return None
+        console.log("[yellow]No numeric data found for outlier detection.")
+        return data
 
     console.log("[cyan]Performing outlier detection...")
-    model = IsolationForest(contamination=0.1, random_state=42)
+    model = IsolationForest(contamination=0.05, random_state=42)
     outliers = model.fit_predict(numeric_data)
     data['Outlier'] = (outliers == -1)
     return data
@@ -56,12 +65,13 @@ def perform_clustering(data):
     """Perform KMeans clustering on numeric data."""
     numeric_data = data.select_dtypes(include='number')
     if numeric_data.shape[1] < 2:
-        return None
+        console.log("[yellow]Insufficient numeric features for clustering.")
+        return data
 
     console.log("[cyan]Performing clustering...")
     scaler = StandardScaler()
     scaled_data = scaler.fit_transform(numeric_data)
-    kmeans = KMeans(n_clusters=3, random_state=42)
+    kmeans = KMeans(n_clusters=3, random_state=42, n_init='auto')
     data['Cluster'] = kmeans.fit_predict(scaled_data)
     return data
 
@@ -69,7 +79,8 @@ def perform_pca(data):
     """Perform Principal Component Analysis (PCA) on numeric data."""
     numeric_data = data.select_dtypes(include='number')
     if numeric_data.shape[1] < 2:
-        return None
+        console.log("[yellow]Insufficient numeric features for PCA.")
+        return data
 
     console.log("[cyan]Performing PCA...")
     scaler = StandardScaler()
@@ -121,33 +132,49 @@ def visualize_data(data):
 
 def encode_image(filepath):
     """Encode an image to base64 for LLM integration."""
-    with open(filepath, "rb") as f:
-        return base64.b64encode(f.read()).decode("utf-8")
+    try:
+        with open(filepath, "rb") as f:
+            return base64.b64encode(f.read()).decode("utf-8")
+    except FileNotFoundError:
+        console.log(f"[red]File not found: {filepath}")
+        return ""
 
 def request_llm_insights(summary):
     """Request insights from LLM based on summary statistics."""
     console.log("[cyan]Requesting insights from LLM...")
-    llm_response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are a data analysis assistant."},
-            {"role": "user", "content": f"Here is the dataset overview: {summary}. Suggest initial analyses."}
-        ]
-    )
-    return llm_response.choices[0].message['content']
+    try:
+        llm_response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a data analysis assistant."},
+                {"role": "user", "content": f"Here is the dataset overview: {summary}. Suggest initial analyses."}
+            ]
+        )
+        return llm_response.choices[0].message['content']
+    except Exception as e:
+        console.log(f"[red]LLM request failed: {e}")
+        return "LLM insights could not be retrieved."
 
 def request_visual_insights(image_data, description):
     """Request LLM to interpret visualizations."""
+    if not image_data:
+        console.log(f"[yellow]Skipping visualization insights for {description}.")
+        return "No insights available."
+
     console.log("[cyan]Requesting visualization insights from LLM...")
-    llm_response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are an expert data visualization analyst."},
-            {"role": "user", "content": f"Here is an image of {description}. Analyze its insights."},
-            {"role": "user", "content": image_data}
-        ]
-    )
-    return llm_response.choices[0].message['content']
+    try:
+        llm_response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert data visualization analyst."},
+                {"role": "user", "content": f"Here is an image of {description}. Analyze its insights."},
+                {"role": "user", "content": image_data}
+            ]
+        )
+        return llm_response.choices[0].message['content']
+    except Exception as e:
+        console.log(f"[red]Visualization insights request failed: {e}")
+        return "Visualization insights could not be retrieved."
 
 def request_story_generation(summary, insights, visual_insights):
     """Generate a Markdown story with LLM."""
@@ -158,14 +185,18 @@ def request_story_generation(summary, insights, visual_insights):
         f"Insights: {insights}. Visualization Insights: {visual_insights}."
     )
 
-    story_response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are a data storytelling assistant."},
-            {"role": "user", "content": story_prompt}
-        ]
-    )
-    return story_response.choices[0].message['content']
+    try:
+        story_response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a data storytelling assistant."},
+                {"role": "user", "content": story_prompt}
+            ]
+        )
+        return story_response.choices[0].message['content']
+    except Exception as e:
+        console.log(f"[red]Story generation request failed: {e}")
+        return "Story generation failed."
 
 def analyze_and_visualize(filename):
     try:
@@ -176,6 +207,9 @@ def analyze_and_visualize(filename):
             return
 
         console.log("[green]Dataset loaded successfully. Performing analysis...")
+
+        # Clean data
+        data = clean_data(data)
 
         # Summarize dataset
         summary = {
