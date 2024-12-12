@@ -211,23 +211,3 @@ def analyze_and_visualize(filename):
             f.write(story)
             f.write("\n![Correlation Heatmap](correlation_heatmap.png)\n")
             f.write("![Boxplot](boxplot.png)\n")
-            f.write("![Histograms](histograms.png)\n")
-            if 'Cluster' in data.columns:
-                f.write("![Cluster Pairplot](cluster_pairplot.png)\n")
-            if os.path.exists("pca_scatterplot.png"):
-                f.write("![PCA Scatterplot](pca_scatterplot.png)\n")
-
-        console.log("[bold green]Analysis complete. Outputs saved.")
-
-    except Exception as e:
-        console.log(f"[red]An error occurred:[/] {e}")
-
-if __name__== "__main__":
-    console.log("[bold blue]Starting autolysis script...")
-    if len(sys.argv) != 2:
-        console.log("[red]Usage: uv run autolysis.py <dataset.csv>")
-        sys.exit(1)
-
-    dataset_file = sys.argv[1]
-    console.log(f"[bold yellow]Processing dataset file:[/] {dataset_file}")
-    analyze_and_visualize(dataset_file)
