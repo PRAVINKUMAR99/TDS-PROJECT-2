@@ -206,13 +206,18 @@ def analyze_and_visualize(filename):
             visual_insights.append(request_visual_insights(encode_image("pca_scatterplot.png"), "PCA scatterplot"))
 
         # Generate Markdown story
-        # Generate Markdown story
-        story = request_story_generation(summary, insights, " ".join(visual_insights))
         try:
+            story = request_story_generation(summary, insights, " ".join(visual_insights))
             with open("README.md", "w") as f:
                 f.write(story)
-                f.write("\n![Correlation Heatmap](correlation_heatmap.png)\n")
-                f.write("![Boxplot](boxplot.png)\n")
+                if os.path.exists("correlation_heatmap.png"):
+                    f.write("\n![Correlation Heatmap](correlation_heatmap.png)\n")
+                if os.path.exists("boxplot.png"):
+                    f.write("![Boxplot](boxplot.png)\n")
+                if os.path.exists("histograms.png"):
+                    f.write("![Histograms](histograms.png)\n")
         except Exception as e:
-            console.log(f"[red]Error writing README.md:[/] {e}")
+            console.log(f"[red]Error writing Markdown file:[/] {e}")
 
+    except Exception as e:
+        console.log(f"[red]An error occurred during analysis:[/] {e}")
