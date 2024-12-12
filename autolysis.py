@@ -146,7 +146,7 @@ def request_llm_insights(summary):
         llm_response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a data analysis assistant."},
+                {"role": "system", "content": "You are a data analysis assistant. Provide concise and actionable insights based on the dataset overview."},
                 {"role": "user", "content": f"Here is the dataset overview: {summary}. Suggest initial analyses."}
             ]
         )
@@ -166,7 +166,7 @@ def request_visual_insights(image_data, description):
         llm_response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are an expert data visualization analyst."},
+                {"role": "system", "content": "You are an expert data visualization analyst. Interpret the visual insights and provide meaningful explanations."},
                 {"role": "user", "content": f"Here is an image of {description}. Analyze its insights."},
                 {"role": "user", "content": image_data}
             ]
@@ -189,7 +189,7 @@ def request_story_generation(summary, insights, visual_insights):
         story_response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a data storytelling assistant."},
+                {"role": "system", "content": "You are a data storytelling assistant. Create detailed yet concise Markdown reports."},
                 {"role": "user", "content": story_prompt}
             ]
         )
@@ -255,3 +255,4 @@ def analyze_and_visualize(filename):
 
     except Exception as e:
         console.log(f"[red]An error occurred during analysis:[/] {e}")
+
