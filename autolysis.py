@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 from dotenv import load_dotenv
 import json
 from concurrent.futures import ThreadPoolExecutor
+import multiprocessing
 
 # Load environment variables
 load_dotenv()
@@ -30,6 +31,9 @@ if not AIPROXY_TOKEN:
 
 import openai
 openai.api_key = AIPROXY_TOKEN
+
+# Determine optimal thread pool size
+MAX_WORKERS = min(8, multiprocessing.cpu_count())
 
 def load_data(file_path):
     """Load the dataset from the provided file path."""
@@ -111,11 +115,13 @@ def generate_visualizations(df, output_dir):
 
     def create_pairplot():
         numeric_cols = df.select_dtypes(include=[np.number]).columns
+        if len(numeric_cols) > 3:  # Limit pairplot to 3 numeric columns for efficiency
+            numeric_cols = numeric_cols[:3]
         if len(numeric_cols) > 1:
             sns.pairplot(df[numeric_cols].dropna(), diag_kind="kde")
             plt.suptitle("Pairplot of Numeric Features", y=1.02, fontsize=16)
 
-    with ThreadPoolExecutor() as executor:
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         # Correlation heatmap
         future = executor.submit(save_plot, output_dir, "correlation_heatmap.png", create_corr_heatmap)
         visualization_paths.append(future.result())
@@ -151,7 +157,7 @@ def ask_llm(prompt):
                 {"role": "system", "content": "You are a data analysis assistant."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=750
+            max_tokens=500  # Reduce token limit for faster response
         )
         return response["choices"][0]["message"]["content"].strip()
     except Exception as e:
