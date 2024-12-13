@@ -1,10 +1,10 @@
 
-# Analysis of media (1).csv
+# Analysis of media .csv
 
 ## Dataset Overview
 The dataset was loaded and analyzed dynamically. Below are the key findings:
 
-- **Dataset Path**: `media (1).csv`
+- **Dataset Path**: `media .csv`
 - **Shape**: 2652 rows and 8 columns.
 
 ## Analysis Highlights
