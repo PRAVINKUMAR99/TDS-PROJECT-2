@@ -62,13 +62,13 @@ else:
 def query_llm(prompt):
     openai.api_key = api_token
     response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
+        model="gpt-4",
         messages=[
             {"role": "system", "content": "You are a helpful assistant for data analysis."},
             {"role": "user", "content": prompt}
         ]
     )
-    return response["choices"][0]["message"]["content"]
+    return response.choices[0].message.content
 
 # Generate robust analysis prompt
 analysis_prompt = f"""
