@@ -17,6 +17,7 @@ import seaborn as sns
 from tenacity import retry, stop_after_attempt, wait_exponential
 import openai
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 
 # Fetch API Token
 api_token = os.getenv("AIPROXY_TOKEN")
@@ -46,6 +47,16 @@ except Exception as e:
     print(f"Error loading dataset: {e}")
     sys.exit(1)
 
+# Limit dataset size for faster processing
+if df.shape[0] > 10000:
+    print("Dataset too large, sampling 10,000 rows for analysis.")
+    df = df.sample(10000, random_state=42)
+
+# Ensure necessary directories exist
+required_dirs = ["goodreads", "happiness", "media"]
+for directory in required_dirs:
+    os.makedirs(directory, exist_ok=True)
+
 # Perform generic analysis
 summary = df.describe(include="all").transpose()
 missing_values = df.isnull().sum()
@@ -58,7 +69,7 @@ else:
     correlation = None
 
 # Function to query LLM with enhanced error handling and logging
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=4, max=30), reraise=True)
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=2, max=20), reraise=True)
 def query_llm(prompt):
     try:
         openai.api_key = api_token
@@ -102,26 +113,35 @@ except Exception as e:
     print(f"Failed to get insights from LLM: {e}")
     insights = "No insights available due to API issues."
 
-# Create visualizations
-if correlation is not None:
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(correlation, annot=True, cmap="coolwarm", cbar_kws={'label': 'Correlation Coefficient'})
-    plt.title("Correlation Heatmap")
-    plt.xlabel("Features")
-    plt.ylabel("Features")
-    plt.savefig("correlation_heatmap.png")
-    plt.close()
+# Concurrently create visualizations
+def create_correlation_heatmap():
+    if correlation is not None:
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(correlation, annot=True, cmap="coolwarm", cbar_kws={'label': 'Correlation Coefficient'})
+        plt.title("Correlation Heatmap")
+        plt.xlabel("Features")
+        plt.ylabel("Features")
+        plt.savefig("correlation_heatmap.png")
+        plt.close()
 
-# Example visualization: Distribution plot (dynamically selected column)
-for col in numeric_df.columns:
-    plt.figure(figsize=(8, 6))
-    sns.histplot(numeric_df[col].dropna(), kde=True, color="blue")
-    plt.title(f"Distribution of {col}")
-    plt.xlabel(col)
-    plt.ylabel("Frequency")
-    plt.grid(True)
-    plt.savefig(f"distribution_{col}.png")
-    plt.close()
+def create_distribution_plots():
+    for col in numeric_df.columns:
+        # Limit bins for columns with large unique values
+        num_unique = numeric_df[col].nunique()
+        bins = 50 if num_unique > 100 else min(num_unique, 20)
+
+        plt.figure(figsize=(8, 6))
+        sns.histplot(numeric_df[col].dropna(), kde=True, color="blue", bins=bins)
+        plt.title(f"Distribution of {col}")
+        plt.xlabel(col)
+        plt.ylabel("Frequency")
+        plt.grid(True)
+        plt.savefig(f"distribution_{col}.png")
+        plt.close()
+
+with ThreadPoolExecutor() as executor:
+    executor.submit(create_correlation_heatmap)
+    executor.submit(create_distribution_plots)
 
 # Generate narrative with robust prompt
 narrative_prompt = f"""
@@ -137,6 +157,8 @@ Report should include:
 2. Key findings from the analysis.
 3. Explanations for the visualizations.
 4. Actionable insights and recommendations.
+5. Summary of any identified data issues.
+6. Next steps for further analysis or preprocessing.
 
 Use bullet points where applicable and ensure the report is concise and insightful.
 """
@@ -146,20 +168,20 @@ except Exception as e:
     print(f"Failed to generate narrative from LLM: {e}")
     story = "Unable to generate narrative due to API issues."
 
-# Save narrative to README.md
-with open("README.md", "w") as f:
+# Save narrative to README.md in the appropriate directory
+output_dir = os.path.splitext(os.path.basename(dataset_path))[0]
+os.makedirs(output_dir, exist_ok=True)
+readme_path = os.path.join(output_dir, "README.md")
+with open(readme_path, "w") as f:
     f.write("# Automated Analysis Report\n\n")
     f.write(story)
     f.write("\n\n![Correlation Heatmap](correlation_heatmap.png)\n")
     for col in numeric_df.columns:
         f.write(f"![Distribution of {col}](distribution_{col}.png)\n")
 
-# Organize outputs into directories
-output_dir = os.path.splitext(os.path.basename(dataset_path))[0]
-os.makedirs(output_dir, exist_ok=True)
-shutil.move("README.md", f"{output_dir}/README.md")
-shutil.move("correlation_heatmap.png", f"{output_dir}/correlation_heatmap.png")
+# Ensure all outputs are in the specified directories
+shutil.move("correlation_heatmap.png", os.path.join(output_dir, "correlation_heatmap.png"))
 for col in numeric_df.columns:
-    shutil.move(f"distribution_{col}.png", f"{output_dir}/distribution_{col}.png")
+    shutil.move(f"distribution_{col}.png", os.path.join(output_dir, f"distribution_{col}.png"))
 
 print(f"Analysis complete. Results saved in {output_dir}/")
