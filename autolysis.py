@@ -6,7 +6,8 @@
 #   "seaborn",
 #   "openai",
 #   "rich",
-#   "scikit-learn"
+#   "scikit-learn",
+#   "tenacity"
 # ]
 # ///
 
@@ -22,6 +23,7 @@ from sklearn.ensemble import IsolationForest
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # Initialize console for rich logging
 console = Console()
@@ -29,6 +31,15 @@ console = Console()
 # Configure OpenAI
 openai.api_key = os.environ.get("AIPROXY_TOKEN")
 
+# Retry settings
+def retry_settings():
+    return retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        retry=retry_if_exception_type(Exception)
+    )
+
+@retry_settings()
 def load_dataset(filename):
     """Load dataset with flexible options."""
     try:
@@ -39,6 +50,78 @@ def load_dataset(filename):
     except Exception as e:
         console.log(f"[yellow]Fallback to alternative delimiters:[/] {e}")
         return pd.read_csv(filename, delimiter=';', encoding="utf-8")
+
+@retry_settings()
+def encode_image(filepath):
+    """Encode an image to base64 for LLM integration."""
+    try:
+        with open(filepath, "rb") as f:
+            return base64.b64encode(f.read()).decode("utf-8")
+    except FileNotFoundError:
+        console.log(f"[red]File not found: {filepath}")
+        return ""
+
+@retry_settings()
+def request_llm_insights(summary):
+    """Request insights from LLM based on summary statistics."""
+    console.log("[cyan]Requesting insights from LLM...")
+    try:
+        llm_response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a data analysis assistant."},
+                {"role": "user", "content": f"Here is the dataset overview: {summary}. Suggest initial analyses."}
+            ]
+        )
+        return llm_response.choices[0].message['content']
+    except Exception as e:
+        console.log(f"[red]LLM request failed: {e}")
+        raise
+
+@retry_settings()
+def request_visual_insights(image_data, description):
+    """Request LLM to interpret visualizations."""
+    if not image_data:
+        console.log(f"[yellow]Skipping visualization insights for {description}.")
+        return "No insights available."
+
+    console.log("[cyan]Requesting visualization insights from LLM...")
+    try:
+        llm_response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert data visualization analyst."},
+                {"role": "user", "content": f"Here is an image of {description}. Analyze its insights."},
+                {"role": "user", "content": image_data}
+            ]
+        )
+        return llm_response.choices[0].message['content']
+    except Exception as e:
+        console.log(f"[red]Visualization insights request failed: {e}")
+        raise
+
+@retry_settings()
+def request_story_generation(summary, insights, visual_insights):
+    """Generate a Markdown story with LLM."""
+    console.log("[cyan]Requesting story generation from LLM...")
+    story_prompt = (
+        f"Using the analysis and visualizations, generate a Markdown report. "
+        f"Include dataset summary, analyses, insights, and implications. Dataset overview: {summary}. "
+        f"Insights: {insights}. Visualization Insights: {visual_insights}."
+    )
+
+    try:
+        story_response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a data storytelling assistant."},
+                {"role": "user", "content": story_prompt}
+            ]
+        )
+        return story_response.choices[0].message['content']
+    except Exception as e:
+        console.log(f"[red]Story generation request failed: {e}")
+        raise
 
 def clean_data(data):
     """Handle missing or invalid data."""
@@ -130,74 +213,6 @@ def visualize_data(data):
         plt.savefig("cluster_pairplot.png")
         plt.close()
 
-def encode_image(filepath):
-    """Encode an image to base64 for LLM integration."""
-    try:
-        with open(filepath, "rb") as f:
-            return base64.b64encode(f.read()).decode("utf-8")
-    except FileNotFoundError:
-        console.log(f"[red]File not found: {filepath}")
-        return ""
-
-def request_llm_insights(summary):
-    """Request insights from LLM based on summary statistics."""
-    console.log("[cyan]Requesting insights from LLM...")
-    try:
-        llm_response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a data analysis assistant. Provide concise and actionable insights based on the dataset overview."},
-                {"role": "user", "content": f"Here is the dataset overview: {summary}. Suggest initial analyses."}
-            ]
-        )
-        return llm_response.choices[0].message['content']
-    except Exception as e:
-        console.log(f"[red]LLM request failed: {e}")
-        return "LLM insights could not be retrieved."
-
-def request_visual_insights(image_data, description):
-    """Request LLM to interpret visualizations."""
-    if not image_data:
-        console.log(f"[yellow]Skipping visualization insights for {description}.")
-        return "No insights available."
-
-    console.log("[cyan]Requesting visualization insights from LLM...")
-    try:
-        llm_response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are an expert data visualization analyst. Interpret the visual insights and provide meaningful explanations."},
-                {"role": "user", "content": f"Here is an image of {description}. Analyze its insights."},
-                {"role": "user", "content": image_data}
-            ]
-        )
-        return llm_response.choices[0].message['content']
-    except Exception as e:
-        console.log(f"[red]Visualization insights request failed: {e}")
-        return "Visualization insights could not be retrieved."
-
-def request_story_generation(summary, insights, visual_insights):
-    """Generate a Markdown story with LLM."""
-    console.log("[cyan]Requesting story generation from LLM...")
-    story_prompt = (
-        f"Using the analysis and visualizations, generate a Markdown report. "
-        f"Include dataset summary, analyses, insights, and implications. Dataset overview: {summary}. "
-        f"Insights: {insights}. Visualization Insights: {visual_insights}."
-    )
-
-    try:
-        story_response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a data storytelling assistant. Create detailed yet concise Markdown reports."},
-                {"role": "user", "content": story_prompt}
-            ]
-        )
-        return story_response.choices[0].message['content']
-    except Exception as e:
-        console.log(f"[red]Story generation request failed: {e}")
-        return "Story generation failed."
-
 def analyze_and_visualize(filename):
     try:
         data = load_dataset(filename)
@@ -255,4 +270,3 @@ def analyze_and_visualize(filename):
 
     except Exception as e:
         console.log(f"[red]An error occurred during analysis:[/] {e}")
-
