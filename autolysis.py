@@ -5,267 +5,204 @@
 #   "matplotlib",
 #   "seaborn",
 #   "openai",
-#   "rich",
-#   "scikit-learn",
-#   "tenacity",
-#   "ipykernel"
+#   "numpy",
+#   "python-dotenv"
 # ]
 # ///
 
 import os
 import sys
-import base64
 import pandas as pd
-import matplotlib.pyplot as plt
+import numpy as np
 import seaborn as sns
+import matplotlib.pyplot as plt
+from dotenv import load_dotenv
+import json
+from concurrent.futures import ThreadPoolExecutor
+import multiprocessing
+
+# Load environment variables
+load_dotenv()
+AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN")
+
+if not AIPROXY_TOKEN:
+    print("Error: AIPROXY_TOKEN environment variable is not set.")
+    sys.exit(1)
+
 import openai
-from rich.console import Console
-from sklearn.ensemble import IsolationForest
-from sklearn.cluster import KMeans
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
-import logging
+openai.api_key = AIPROXY_TOKEN
 
-# Initialize console for rich logging
-console = Console()
+# Determine optimal thread pool size
+MAX_WORKERS = min(8, multiprocessing.cpu_count())
 
-# Configure logging for tenacity
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Configure OpenAI
-openai.api_key = os.environ.get("AIPROXY_TOKEN")
-
-# Retry settings
-def retry_settings_with_logging():
-    return retry(
-        stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
-        retry=retry_if_exception_type(Exception),
-        before_sleep=before_sleep_log(logger, logging.INFO)
-    )
-
-@retry_settings_with_logging()
-def load_dataset(filename):
-    """Load dataset with flexible options."""
+def load_data(file_path):
+    """Load the dataset from the provided file path."""
     try:
-        console.log(f"[bold blue]Loading dataset:[/] {filename}")
-        return pd.read_csv(filename, encoding="utf-8")
-    except UnicodeDecodeError:
-        return pd.read_csv(filename, encoding="ISO-8859-1")
+        if file_path.endswith('.csv'):
+            df = pd.read_csv(file_path)
+        elif file_path.endswith('.xlsx'):
+            df = pd.read_excel(file_path)
+        elif file_path.endswith('.json'):
+            df = pd.read_json(file_path)
+        else:
+            raise ValueError("Unsupported file format. Please provide a .csv, .xlsx, or .json file.")
+        return df
     except Exception as e:
-        console.log(f"[yellow]Fallback to alternative delimiters:[/] {e}")
-        return pd.read_csv(filename, delimiter=';', encoding="utf-8")
+        print(f"Error loading file: {e}")
+        sys.exit(1)
 
-@retry_settings_with_logging()
-def encode_image(filepath):
-    """Encode an image to base64 for LLM integration."""
+def analyze_missing_data(df):
+    """Analyze and report missing data in the dataset."""
+    missing_data = (df.isnull().sum() / len(df)) * 100
+    return missing_data[missing_data > 0].sort_values(ascending=False).to_dict()
+
+def summarize_data(df):
+    """Generate a summary of the dataset with serializable data types."""
     try:
-        with open(filepath, "rb") as f:
-            return base64.b64encode(f.read()).decode("utf-8")
-    except FileNotFoundError:
-        console.log(f"[red]File not found: {filepath}")
-        return ""
+        summary = {
+            "shape": df.shape,
+            "columns": {col: str(dtype) for col, dtype in df.dtypes.items()},
+            "missing_values": analyze_missing_data(df),
+            "summary_stats": df.describe(include='all').applymap(
+                lambda x: x.item() if isinstance(x, (np.generic, np.number)) else x
+            ).to_dict()
+        }
+        return summary
+    except Exception as e:
+        print(f"Error summarizing data: {e}")
+        return {}
 
-@retry_settings_with_logging()
-def request_llm_insights(summary):
-    """Request insights from LLM based on summary statistics."""
-    console.log("[cyan]Requesting insights from LLM...")
-    models = ["gpt-4o-mini"]
-    for model in models:
-        try:
-            llm_response = openai.ChatCompletion.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": "You are a data analysis assistant."},
-                    {"role": "user", "content": f"Here is the dataset overview: {summary}. Suggest initial analyses."}
-                ],
-                timeout=30  # Explicit timeout for API call
-            )
-            return llm_response.choices[0].message['content']
-        except Exception as e:
-            console.log(f"[red]Model {model} failed: {e}. Retrying with the next model...")
-            continue
-    raise RuntimeError("All models failed to generate insights.")
+def save_plot(output_dir, filename, plot_func):
+    """Save a plot using the provided plotting function."""
+    path = os.path.join(output_dir, filename)
+    try:
+        plot_func()
+        plt.savefig(path, bbox_inches="tight")
+        plt.close()
+        return filename
+    except Exception as e:
+        print(f"Error generating plot {filename}: {e}")
+        return None
 
-@retry_settings_with_logging()
-def request_visual_insights(image_data, description):
-    """Request LLM to interpret visualizations."""
-    if not image_data:
-        console.log(f"[yellow]Skipping visualization insights for {description}.")
-        return "No insights available."
+def generate_visualizations(df, output_dir):
+    """Create visualizations for the dataset."""
+    visualization_paths = []
 
-    console.log("[cyan]Requesting visualization insights from LLM...")
-    models = ["gpt-4o-mini"]
-    for model in models:
-        try:
-            llm_response = openai.ChatCompletion.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": "You are an expert data visualization analyst."},
-                    {"role": "user", "content": f"Here is an image of {description}. Analyze its insights."},
-                    {"role": "user", "content": image_data}
-                ],
-                timeout=30  # Explicit timeout for API call
-            )
-            return llm_response.choices[0].message['content']
-        except Exception as e:
-            console.log(f"[red]Visualization insights request failed: {e}")
-            continue
-    raise RuntimeError("All models failed to generate visualization insights.")
+    def create_corr_heatmap():
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        if len(numeric_cols) > 2:  # Limit to top 2 correlated features
+            corr = df[numeric_cols].corr()
+            top_corr = corr.abs().unstack().sort_values(kind="quicksort", ascending=False)
+            top_features = set(top_corr.index[0])
+            df_corr_subset = df[list(top_features)]
+            corr = df_corr_subset.corr()
+            plt.figure(figsize=(8, 6))
+            sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm")
+            plt.title("Top Feature Correlation Heatmap", fontsize=14)
 
-@retry_settings_with_logging()
-def request_story_generation(summary, insights, visual_insights):
-    """Generate a Markdown story with LLM."""
-    console.log("[cyan]Requesting story generation from LLM...")
-    story_prompt = (
-        f"Using the analysis and visualizations, generate a Markdown report. "
-        f"Include dataset summary, analyses, insights, and implications. Dataset overview: {summary}. "
-        f"Insights: {insights}. Visualization Insights: {visual_insights}."
+    def create_distribution_plot(col):
+        plt.figure(figsize=(6, 4))
+        sns.histplot(df[col].dropna(), kde=True, bins=30, color="blue")
+        plt.title(f"Distribution of {col}", fontsize=12)
+        plt.xlabel(col)
+        plt.ylabel("Frequency")
+
+    def create_missing_value_heatmap():
+        if df.isnull().sum().sum() > 0:  # Only generate if missing values exist
+            plt.figure(figsize=(8, 4))
+            sns.heatmap(df.isnull(), cbar=False, cmap="viridis")
+            plt.title("Missing Values Heatmap", fontsize=12)
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        # Correlation heatmap
+        future = executor.submit(save_plot, output_dir, "correlation_heatmap.png", create_corr_heatmap)
+        visualization_paths.append(future.result())
+
+        # Numeric column distributions
+        numeric_cols = df.select_dtypes(include=[np.number]).columns[:3]  # Limit to 3 distributions
+        for col in numeric_cols:
+            future = executor.submit(save_plot, output_dir, f"distribution_{col}.png", lambda: create_distribution_plot(col))
+            visualization_paths.append(future.result())
+
+        # Missing values heatmap
+        future = executor.submit(save_plot, output_dir, "missing_values_heatmap.png", create_missing_value_heatmap)
+        visualization_paths.append(future.result())
+
+    return [path for path in visualization_paths if path]
+
+def ask_llm(prompt):
+    """Send a prompt to the LLM and retrieve the response."""
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",  # Using a powerful model for robust outputs
+            messages=[
+                {"role": "system", "content": "You are a data analysis assistant."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=300  # Reduce token limit for faster response
+        )
+        return response["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        print(f"Error communicating with LLM: {e}")
+        return "Error generating narrative."
+
+def narrate_story(summary, visualizations):
+    """Generate a narrative based on the dataset summary and visualizations."""
+    prompt = (
+        """Analyze the following dataset summary and visualizations. "
+        "Provide a comprehensive analysis, including key insights, statistical findings, and actionable conclusions."""
+        f"\n\nDataset Summary:\n{json.dumps(summary, indent=2)}"
+        f"\n\nVisualizations:\n{', '.join(visualizations)}"
+    )
+    return ask_llm(prompt)
+
+def write_readme(content, output_dir):
+    """Write the analysis report to a README.md file."""
+    readme_path = os.path.join(output_dir, "README.md")
+    try:
+        with open(readme_path, "w") as f:
+            f.write(content)
+        return readme_path
+    except Exception as e:
+        print(f"Error writing README: {e}")
+        return None
+
+def main():
+    """Main function to orchestrate the analysis process."""
+    if len(sys.argv) != 2:
+        print("Usage: uv run autolysis.py <dataset>\nSupported formats: .csv, .xlsx, .json")
+        sys.exit(1)
+
+    file_path = sys.argv[1]
+    output_dir = os.path.dirname(file_path)
+
+    # Load and summarize data
+    df = load_data(file_path)
+    summary = summarize_data(df)
+
+    # Generate visualizations
+    visualizations = generate_visualizations(df, output_dir)
+
+    # Generate narrative
+    story = narrate_story(summary, visualizations)
+
+    # Compile README content
+    readme_content = (
+        "# Analysis Report\n\n"
+        "## Dataset Summary\n\n"
+        f"```json\n{json.dumps(summary, indent=2)}\n```\n\n"
+        "## Visualizations\n\n"
+        + "\n".join([f"![{viz}]({viz})" for viz in visualizations]) +
+        "\n\n## Story\n\n"
+        f"{story}"
     )
 
-    models = ["gpt-4o-mini", "gpt-3.5-turbo"]
-    for model in models:
-        try:
-            story_response = openai.ChatCompletion.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": "You are a data storytelling assistant."},
-                    {"role": "user", "content": story_prompt}
-                ],
-                timeout=30  # Explicit timeout for API call
-            )
-            return story_response.choices[0].message['content']
-        except Exception as e:
-            console.log(f"[red]Model {model} failed: {e}. Retrying with the next model...")
-            continue
-    raise RuntimeError("All models failed to generate the story.")
-
-def clean_data(data):
-    """Handle missing or invalid data."""
-    console.log("[cyan]Cleaning data...")
-    data = data.drop_duplicates()
-    data = data.dropna(how='all')
-    data.fillna(data.median(numeric_only=True), inplace=True)
-    return data
-
-def detect_outliers(data):
-    """Detect outliers using Isolation Forest."""
-    numeric_data = data.select_dtypes(include='number')
-    if numeric_data.empty:
-        console.log("[yellow]No numeric data found for outlier detection.")
-        return data
-
-    console.log("[cyan]Performing outlier detection...")
-    model = IsolationForest(contamination=0.05, random_state=42)
-    outliers = model.fit_predict(numeric_data)
-    data['Outlier'] = (outliers == -1)
-    return data
-
-def perform_clustering(data):
-    """Perform KMeans clustering on numeric data."""
-    numeric_data = data.select_dtypes(include='number')
-    if numeric_data.shape[1] < 2:
-        console.log("[yellow]Insufficient numeric features for clustering.")
-        return data
-
-    console.log("[cyan]Performing clustering...")
-    scaler = StandardScaler()
-    scaled_data = scaler.fit_transform(numeric_data)
-    kmeans = KMeans(n_clusters=3, random_state=42, n_init='auto')
-    data['Cluster'] = kmeans.fit_predict(scaled_data)
-    return data
-
-def perform_pca(data):
-    """Perform Principal Component Analysis (PCA) on numeric data."""
-    numeric_data = data.select_dtypes(include='number')
-    if numeric_data.shape[1] < 2:
-        console.log("[yellow]Insufficient numeric features for PCA.")
-        return data
-
-    console.log("[cyan]Performing PCA...")
-    scaler = StandardScaler()
-    scaled_data = scaler.fit_transform(numeric_data)
-    pca = PCA(n_components=2)
-    components = pca.fit_transform(scaled_data)
-    data['PCA1'] = components[:, 0]
-    data['PCA2'] = components[:, 1]
-
-    # Scatter plot for PCA
-    plt.figure(figsize=(8, 6))
-    sns.scatterplot(x='PCA1', y='PCA2', hue='Cluster', data=data, palette='tab10')
-    plt.title("PCA Scatterplot")
-    plt.savefig("pca_scatterplot.png")
-    plt.close()
-
-    return data
-
-def visualize_data(data):
-    """Generate advanced visualizations."""
-    numeric_data = data.select_dtypes(include='number')
-
-    if not numeric_data.empty:
-        console.log("[cyan]Generating correlation heatmap...")
-        plt.figure(figsize=(10, 8))
-        sns.heatmap(numeric_data.corr(), annot=True, cmap="coolwarm")
-        plt.title("Correlation Heatmap")
-        plt.savefig("correlation_heatmap.png")
-        plt.close()
-
-        console.log("[cyan]Generating boxplot...")
-        plt.figure(figsize=(12, 6))
-        sns.boxplot(data=numeric_data)
-        plt.title("Boxplot of Numeric Data")
-        plt.savefig("boxplot.png")
-        plt.close()
-
-        console.log("[cyan]Generating histograms...")
-        numeric_data.hist(figsize=(12, 10), bins=20, color='teal')
-        plt.savefig("histograms.png")
-        plt.close()
-
+    # Write README
+    readme_path = write_readme(readme_content, output_dir)
+    if readme_path:
+        print(f"Analysis complete. Results saved in {output_dir}.")
     else:
-        console.log("[yellow]No numeric data available for visualizations.")
-
-    return
-
-def write_readme():
-    """Write README.md to the current working directory."""
-    console.log("[cyan]Generating README.md...")
-    readme_content = """# Analysis Outputs
-
-This directory contains the outputs of the analysis:
-
-- **correlation_heatmap.png**: A heatmap showing correlations between numeric variables.
-- **boxplot.png**: Boxplots of numeric variables for outlier detection.
-- **histograms.png**: Histograms of numeric data distribution.
-- **pca_scatterplot.png**: A scatterplot of the first two PCA components.
-
-## Notes
-- Generated using the autolysis.py script.
-- Insights are enriched with LLM-powered descriptions.
-"""
-    with open("README.md", "w") as f:
-        f.write(readme_content)
-    console.log("[green]README.md generated successfully.")
+        print("Analysis complete, but failed to save the README file.")
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        console.log("[red]Usage: python autolysis.py <path_to_csv_file>")
-        sys.exit(1)
-
-    input_file = sys.argv[1]
-    if not os.path.exists(input_file):
-        console.log(f"[red]File not found: {input_file}")
-        sys.exit(1)
-
-    data = load_dataset(input_file)
-    data = clean_data(data)
-    data = detect_outliers(data)
-    data = perform_clustering(data)
-    data = perform_pca(data)
-    visualize_data(data)
-    write_readme()
-
-    console.log("[green]Analysis completed successfully.")
+    main()
