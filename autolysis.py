@@ -23,23 +23,29 @@ from sklearn.ensemble import IsolationForest
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
+import logging
 
 # Initialize console for rich logging
 console = Console()
+
+# Configure logging for tenacity
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Configure OpenAI
 openai.api_key = os.environ.get("AIPROXY_TOKEN")
 
 # Retry settings
-def retry_settings():
+def retry_settings_with_logging():
     return retry(
         stop=stop_after_attempt(5),
         wait=wait_exponential(multiplier=1, min=4, max=10),
-        retry=retry_if_exception_type(Exception)
+        retry=retry_if_exception_type(Exception),
+        before_sleep=before_sleep_log(logger, logging.INFO)
     )
 
-@retry_settings()
+@retry_settings_with_logging()
 def load_dataset(filename):
     """Load dataset with flexible options."""
     try:
@@ -51,7 +57,7 @@ def load_dataset(filename):
         console.log(f"[yellow]Fallback to alternative delimiters:[/] {e}")
         return pd.read_csv(filename, delimiter=';', encoding="utf-8")
 
-@retry_settings()
+@retry_settings_with_logging()
 def encode_image(filepath):
     """Encode an image to base64 for LLM integration."""
     try:
@@ -61,24 +67,28 @@ def encode_image(filepath):
         console.log(f"[red]File not found: {filepath}")
         return ""
 
-@retry_settings()
+@retry_settings_with_logging()
 def request_llm_insights(summary):
     """Request insights from LLM based on summary statistics."""
     console.log("[cyan]Requesting insights from LLM...")
-    try:
-        llm_response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a data analysis assistant."},
-                {"role": "user", "content": f"Here is the dataset overview: {summary}. Suggest initial analyses."}
-            ]
-        )
-        return llm_response.choices[0].message['content']
-    except Exception as e:
-        console.log(f"[red]LLM request failed: {e}")
-        raise
+    models = ["gpt-4o-mini", "gpt-3.5-turbo"]
+    for model in models:
+        try:
+            llm_response = openai.ChatCompletion.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": "You are a data analysis assistant."},
+                    {"role": "user", "content": f"Here is the dataset overview: {summary}. Suggest initial analyses."}
+                ],
+                timeout=30  # Explicit timeout for API call
+            )
+            return llm_response.choices[0].message['content']
+        except Exception as e:
+            console.log(f"[red]Model {model} failed: {e}. Retrying with the next model...")
+            continue
+    raise RuntimeError("All models failed to generate insights.")
 
-@retry_settings()
+@retry_settings_with_logging()
 def request_visual_insights(image_data, description):
     """Request LLM to interpret visualizations."""
     if not image_data:
@@ -86,21 +96,25 @@ def request_visual_insights(image_data, description):
         return "No insights available."
 
     console.log("[cyan]Requesting visualization insights from LLM...")
-    try:
-        llm_response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are an expert data visualization analyst."},
-                {"role": "user", "content": f"Here is an image of {description}. Analyze its insights."},
-                {"role": "user", "content": image_data}
-            ]
-        )
-        return llm_response.choices[0].message['content']
-    except Exception as e:
-        console.log(f"[red]Visualization insights request failed: {e}")
-        raise
+    models = ["gpt-4o-mini", "gpt-3.5-turbo"]
+    for model in models:
+        try:
+            llm_response = openai.ChatCompletion.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": "You are an expert data visualization analyst."},
+                    {"role": "user", "content": f"Here is an image of {description}. Analyze its insights."},
+                    {"role": "user", "content": image_data}
+                ],
+                timeout=30  # Explicit timeout for API call
+            )
+            return llm_response.choices[0].message['content']
+        except Exception as e:
+            console.log(f"[red]Visualization insights request failed: {e}")
+            continue
+    raise RuntimeError("All models failed to generate visualization insights.")
 
-@retry_settings()
+@retry_settings_with_logging()
 def request_story_generation(summary, insights, visual_insights):
     """Generate a Markdown story with LLM."""
     console.log("[cyan]Requesting story generation from LLM...")
@@ -110,18 +124,22 @@ def request_story_generation(summary, insights, visual_insights):
         f"Insights: {insights}. Visualization Insights: {visual_insights}."
     )
 
-    try:
-        story_response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a data storytelling assistant."},
-                {"role": "user", "content": story_prompt}
-            ]
-        )
-        return story_response.choices[0].message['content']
-    except Exception as e:
-        console.log(f"[red]Story generation request failed: {e}")
-        raise
+    models = ["gpt-4o-mini", "gpt-3.5-turbo"]
+    for model in models:
+        try:
+            story_response = openai.ChatCompletion.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": "You are a data storytelling assistant."},
+                    {"role": "user", "content": story_prompt}
+                ],
+                timeout=30  # Explicit timeout for API call
+            )
+            return story_response.choices[0].message['content']
+        except Exception as e:
+            console.log(f"[red]Model {model} failed: {e}. Retrying with the next model...")
+            continue
+    raise RuntimeError("All models failed to generate the story.")
 
 def clean_data(data):
     """Handle missing or invalid data."""
@@ -250,23 +268,3 @@ def analyze_and_visualize(filename):
         if os.path.exists("correlation_heatmap.png"):
             visual_insights.append(request_visual_insights(encode_image("correlation_heatmap.png"), "correlation heatmap"))
         if os.path.exists("cluster_pairplot.png"):
-            visual_insights.append(request_visual_insights(encode_image("cluster_pairplot.png"), "cluster pairplot"))
-        if os.path.exists("pca_scatterplot.png"):
-            visual_insights.append(request_visual_insights(encode_image("pca_scatterplot.png"), "PCA scatterplot"))
-
-        # Generate Markdown story
-        try:
-            story = request_story_generation(summary, insights, " ".join(visual_insights))
-            with open("README.md", "w") as f:
-                f.write(story)
-                if os.path.exists("correlation_heatmap.png"):
-                    f.write("\n![Correlation Heatmap](correlation_heatmap.png)\n")
-                if os.path.exists("boxplot.png"):
-                    f.write("![Boxplot](boxplot.png)\n")
-                if os.path.exists("histograms.png"):
-                    f.write("![Histograms](histograms.png)\n")
-        except Exception as e:
-            console.log(f"[red]Error writing Markdown file:[/] {e}")
-
-    except Exception as e:
-        console.log(f"[red]An error occurred during analysis:[/] {e}")
