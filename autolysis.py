@@ -250,7 +250,7 @@ This directory contains the outputs of the analysis:
         f.write(readme_content)
     console.log("[green]README.md generated successfully.")
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     if len(sys.argv) < 2:
         console.log("[red]Usage: python autolysis.py <path_to_csv_file>")
         sys.exit(1)
