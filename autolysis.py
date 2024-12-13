@@ -268,3 +268,29 @@ def analyze_and_visualize(filename):
         if os.path.exists("correlation_heatmap.png"):
             visual_insights.append(request_visual_insights(encode_image("correlation_heatmap.png"), "correlation heatmap"))
         if os.path.exists("cluster_pairplot.png"):
+            visual_insights.append(request_visual_insights(encode_image("cluster_pairplot.png"), "cluster pairplot"))
+
+        # Request story generation
+        story = request_story_generation(summary, insights, visual_insights)
+
+        # Determine output directory
+        dataset_name = os.path.splitext(os.path.basename(filename))[0]
+        output_dir = os.path.join(os.getcwd(), dataset_name)
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Save story to README.md
+        readme_path = os.path.join(output_dir, "README.md")
+        with open(readme_path, "w", encoding="utf-8") as f:
+            f.write(story)
+
+        console.log(f"[green]Analysis complete. Report saved to {readme_path}")
+    except Exception as e:
+        console.log(f"[red]An error occurred during analysis: {e}")
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        console.log("[red]Please provide the dataset filename as a command-line argument.")
+        sys.exit(1)
+
+    input_filename = sys.argv[1]
+    analyze_and_visualize(input_filename)
