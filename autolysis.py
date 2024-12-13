@@ -228,13 +228,17 @@ with open(readme_path, "w") as f:
 
 # Ensure all outputs are in the specified directories
 # Move generated files to the output directory
-shutil.move("correlation_heatmap.png", os.path.join(output_dir, "correlation_heatmap.png"))
-shutil.move("outlier_detection.png", os.path.join(output_dir, "outlier_detection.png"))
-shutil.move("clustering_analysis.png", os.path.join(output_dir, "clustering_analysis.png"))
-shutil.move("pca_analysis.png", os.path.join(output_dir, "pca_analysis.png"))
+def safe_move(src, dst):
+    """Move a file only if it exists."""
+    if os.path.exists(src):
+        shutil.move(src, dst)
+
+safe_move("correlation_heatmap.png", os.path.join(output_dir, "correlation_heatmap.png"))
+safe_move("outlier_detection.png", os.path.join(output_dir, "outlier_detection.png"))
+safe_move("clustering_analysis.png", os.path.join(output_dir, "clustering_analysis.png"))
+safe_move("pca_analysis.png", os.path.join(output_dir, "pca_analysis.png"))
 for col in numeric_df.columns:
     distribution_plot = f"distribution_{col}.png"
-    if os.path.exists(distribution_plot):
-        shutil.move(distribution_plot, os.path.join(output_dir, distribution_plot))
+    safe_move(distribution_plot, os.path.join(output_dir, distribution_plot))
 
 print(f"Analysis complete. Results saved in {output_dir}/")
