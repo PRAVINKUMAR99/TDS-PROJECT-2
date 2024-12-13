@@ -153,14 +153,16 @@ Based on the following details, create a Markdown-formatted report:
 - Visualizations: ['correlation_heatmap.png', 'distribution_*.png']
 
 Report should include:
-1. An overview of the dataset.
-2. Key findings from the analysis.
-3. Explanations for the visualizations.
-4. Actionable insights and recommendations.
-5. Summary of any identified data issues.
-6. Next steps for further analysis or preprocessing.
+1. **Overview of the Dataset**: Include a brief description of the dataset and its features.
+2. **Key Findings from the Analysis**: Highlight major trends, patterns, and anomalies in the dataset.
+3. **Visualizations**: Provide clear explanations for the visualizations created, including statistical methods:
+    - For the correlation heatmap: Explain that it shows the linear relationship between numerical features, with values close to 1 or -1 indicating strong correlations.
+    - For distribution plots: Describe the shape of the data (e.g., normal distribution, skewness) and its implications for analysis.
+4. **Actionable Insights and Recommendations**: Suggest practical steps or decisions based on the analysis results.
+5. **Summary of Data Issues**: Note any missing data, outliers, or potential quality concerns.
+6. **Next Steps**: Recommend further analyses, cleaning, or data collection to improve the dataset.
 
-Use bullet points where applicable and ensure the report is concise and insightful.
+Use bullet points, subheaders, and bold text where applicable to make the report structured and easy to read.
 """
 try:
     story = query_llm(narrative_prompt)
@@ -175,7 +177,8 @@ readme_path = os.path.join(output_dir, "README.md")
 with open(readme_path, "w") as f:
     f.write("# Automated Analysis Report\n\n")
     f.write(story)
-    f.write("\n\n![Correlation Heatmap](correlation_heatmap.png)\n")
+    f.write("\n\n## Visualizations\n")
+    f.write("![Correlation Heatmap](correlation_heatmap.png)\n")
     for col in numeric_df.columns:
         f.write(f"![Distribution of {col}](distribution_{col}.png)\n")
 
