@@ -4,7 +4,7 @@
 #   "pandas",
 #   "matplotlib",
 #   "seaborn",
-#   "openai==0.28.0",
+#   "openai>=0.27.0",
 #   "tenacity",
 # ]
 # ///
@@ -57,18 +57,29 @@ if numeric_df.shape[1] > 1:
 else:
     correlation = None
 
-# Function to query LLM
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+# Function to query LLM with enhanced error handling and logging
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=4, max=30), reraise=True)
 def query_llm(prompt):
-    openai.api_key = api_token
-    response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant for data analysis."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    return response["choices"][0]["message"]["content"]
+    try:
+        openai.api_key = api_token
+        response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant for data analysis."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        # Validate response structure
+        if "choices" in response and response["choices"]:
+            return response["choices"][0]["message"]["content"]
+        else:
+            raise ValueError("Invalid response structure from OpenAI API.")
+    except openai.error.OpenAIError as e:
+        print(f"OpenAI API error: {e}")
+        raise
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        raise
 
 # Generate robust analysis prompt
 analysis_prompt = f"""
@@ -85,7 +96,11 @@ Task:
 
 Provide your suggestions in bullet points.
 """
-insights = query_llm(analysis_prompt)
+try:
+    insights = query_llm(analysis_prompt)
+except Exception as e:
+    print(f"Failed to get insights from LLM: {e}")
+    insights = "No insights available due to API issues."
 
 # Create visualizations
 if correlation is not None:
@@ -125,7 +140,11 @@ Report should include:
 
 Use bullet points where applicable and ensure the report is concise and insightful.
 """
-story = query_llm(narrative_prompt)
+try:
+    story = query_llm(narrative_prompt)
+except Exception as e:
+    print(f"Failed to generate narrative from LLM: {e}")
+    story = "Unable to generate narrative due to API issues."
 
 # Save narrative to README.md
 with open("README.md", "w") as f:
