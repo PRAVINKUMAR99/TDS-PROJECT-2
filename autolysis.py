@@ -221,76 +221,50 @@ def visualize_data(data):
 
         console.log("[cyan]Generating histograms...")
         numeric_data.hist(figsize=(12, 10), bins=20, color='teal')
-        plt.suptitle("Histograms of Numeric Data")
         plt.savefig("histograms.png")
         plt.close()
 
-    if 'Cluster' in data.columns:
-        console.log("[cyan]Generating cluster pairplot...")
-        sns.pairplot(data, hue='Cluster', palette="tab10")
-        plt.savefig("cluster_pairplot.png")
-        plt.close()
+    else:
+        console.log("[yellow]No numeric data available for visualizations.")
 
-def analyze_and_visualize(filename):
-    try:
-        data = load_dataset(filename)
+    return
 
-        if data.empty:
-            console.log("[red]The dataset is empty. Exiting analysis.")
-            return
+def write_readme():
+    """Write README.md to the current working directory."""
+    console.log("[cyan]Generating README.md...")
+    readme_content = """# Analysis Outputs
 
-        console.log("[green]Dataset loaded successfully. Performing analysis...")
+This directory contains the outputs of the analysis:
 
-        # Clean data
-        data = clean_data(data)
+- **correlation_heatmap.png**: A heatmap showing correlations between numeric variables.
+- **boxplot.png**: Boxplots of numeric variables for outlier detection.
+- **histograms.png**: Histograms of numeric data distribution.
+- **pca_scatterplot.png**: A scatterplot of the first two PCA components.
 
-        # Summarize dataset
-        summary = {
-            "columns": data.columns.tolist(),
-            "types": data.dtypes.astype(str).to_dict(),
-            "missing_values": data.isnull().sum().to_dict(),
-            "summary_stats": data.describe(include='all', datetime_is_numeric=True).to_dict(),
-        }
-
-        # Detect outliers and perform clustering
-        data = detect_outliers(data)
-        data = perform_clustering(data)
-        data = perform_pca(data)
-
-        # Visualize data
-        visualize_data(data)
-
-        # Request insights from LLM
-        insights = request_llm_insights(summary)
-
-        # Encode visualizations and request LLM insights
-        visual_insights = []
-        if os.path.exists("correlation_heatmap.png"):
-            visual_insights.append(request_visual_insights(encode_image("correlation_heatmap.png"), "correlation heatmap"))
-        if os.path.exists("cluster_pairplot.png"):
-            visual_insights.append(request_visual_insights(encode_image("cluster_pairplot.png"), "cluster pairplot"))
-
-        # Request story generation
-        story = request_story_generation(summary, insights, visual_insights)
-
-        # Determine output directory
-        dataset_name = os.path.splitext(os.path.basename(filename))[0]
-        output_dir = os.path.join(os.getcwd(), dataset_name)
-        os.makedirs(output_dir, exist_ok=True)
-
-        # Save story to README.md
-        readme_path = os.path.join(output_dir, "README.md")
-        with open(readme_path, "w", encoding="utf-8") as f:
-            f.write(story)
-
-        console.log(f"[green]Analysis complete. Report saved to {readme_path}")
-    except Exception as e:
-        console.log(f"[red]An error occurred during analysis: {e}")
+## Notes
+- Generated using the autolysis.py script.
+- Insights are enriched with LLM-powered descriptions.
+"""
+    with open("README.md", "w") as f:
+        f.write(readme_content)
+    console.log("[green]README.md generated successfully.")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        console.log("[red]Please provide the dataset filename as a command-line argument.")
+        console.log("[red]Usage: python autolysis.py <path_to_csv_file>")
         sys.exit(1)
 
-    input_filename = sys.argv[1]
-    analyze_and_visualize(input_filename)
+    input_file = sys.argv[1]
+    if not os.path.exists(input_file):
+        console.log(f"[red]File not found: {input_file}")
+        sys.exit(1)
+
+    data = load_dataset(input_file)
+    data = clean_data(data)
+    data = detect_outliers(data)
+    data = perform_clustering(data)
+    data = perform_pca(data)
+    visualize_data(data)
+    write_readme()
+
+    console.log("[green]Analysis completed successfully.")
