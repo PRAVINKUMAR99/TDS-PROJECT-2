@@ -33,8 +33,15 @@ dataset_path = sys.argv[1]
 
 # Load the dataset
 try:
-    df = pd.read_csv(dataset_path)
+    df = pd.read_csv(dataset_path, encoding="utf-8")
     print(f"Loaded dataset with {df.shape[0]} rows and {df.shape[1]} columns.")
+except UnicodeDecodeError:
+    try:
+        df = pd.read_csv(dataset_path, encoding="latin1")
+        print(f"Loaded dataset with {df.shape[0]} rows and {df.shape[1]} columns using latin1 encoding.")
+    except Exception as e:
+        print(f"Error loading dataset: {e}")
+        sys.exit(1)
 except Exception as e:
     print(f"Error loading dataset: {e}")
     sys.exit(1)
