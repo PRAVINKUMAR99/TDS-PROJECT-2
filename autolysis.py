@@ -7,7 +7,8 @@
 #   "openai",
 #   "rich",
 #   "scikit-learn",
-#   "tenacity"
+#   "tenacity",
+#   "ipykernel"
 # ]
 # ///
 
