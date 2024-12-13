@@ -72,7 +72,7 @@ def encode_image(filepath):
 def request_llm_insights(summary):
     """Request insights from LLM based on summary statistics."""
     console.log("[cyan]Requesting insights from LLM...")
-    models = ["gpt-4o-mini", "gpt-3.5-turbo"]
+    models = ["gpt-4o-mini"]
     for model in models:
         try:
             llm_response = openai.ChatCompletion.create(
@@ -97,7 +97,7 @@ def request_visual_insights(image_data, description):
         return "No insights available."
 
     console.log("[cyan]Requesting visualization insights from LLM...")
-    models = ["gpt-4o-mini", "gpt-3.5-turbo"]
+    models = ["gpt-4o-mini"]
     for model in models:
         try:
             llm_response = openai.ChatCompletion.create(
