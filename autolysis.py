@@ -215,4 +215,26 @@ except Exception as e:
 output_dir = os.path.splitext(os.path.basename(dataset_path))[0]
 os.makedirs(output_dir, exist_ok=True)
 readme_path = os.path.join(output_dir, "README.md")
-with open(readme_path, "w")
+with open(readme_path, "w") as f:
+    f.write("# Automated Analysis Report\n\n")
+    f.write(story)
+    f.write("\n\n## Visualizations\n")
+    f.write("![Correlation Heatmap](correlation_heatmap.png)\n")
+    for col in numeric_df.columns:
+        f.write(f"![Distribution of {col}](distribution_{col}.png)\n")
+    f.write("![Outlier Detection](outlier_detection.png)\n")
+    f.write("![Clustering Analysis](clustering_analysis.png)\n")
+    f.write("![PCA Analysis](pca_analysis.png)\n")
+
+# Ensure all outputs are in the specified directories
+# Move generated files to the output directory
+shutil.move("correlation_heatmap.png", os.path.join(output_dir, "correlation_heatmap.png"))
+shutil.move("outlier_detection.png", os.path.join(output_dir, "outlier_detection.png"))
+shutil.move("clustering_analysis.png", os.path.join(output_dir, "clustering_analysis.png"))
+shutil.move("pca_analysis.png", os.path.join(output_dir, "pca_analysis.png"))
+for col in numeric_df.columns:
+    distribution_plot = f"distribution_{col}.png"
+    if os.path.exists(distribution_plot):
+        shutil.move(distribution_plot, os.path.join(output_dir, distribution_plot))
+
+print(f"Analysis complete. Results saved in {output_dir}/")
