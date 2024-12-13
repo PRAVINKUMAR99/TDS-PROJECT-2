@@ -54,22 +54,26 @@ def analyze_missing_data(df):
 
 def summarize_data(df):
     """Generate a summary of the dataset with serializable data types."""
-    summary = {
-        "shape": df.shape,
-        "columns": {col: str(dtype) for col, dtype in df.dtypes.items()},
-        "missing_values": analyze_missing_data(df),
-        "summary_stats": df.describe(include='all').applymap(
-            lambda x: x.item() if isinstance(x, (np.generic, np.number)) else x
-        ).to_dict()
-    }
-    return summary
+    try:
+        summary = {
+            "shape": df.shape,
+            "columns": {col: str(dtype) for col, dtype in df.dtypes.items()},
+            "missing_values": analyze_missing_data(df),
+            "summary_stats": df.describe(include='all').applymap(
+                lambda x: x.item() if isinstance(x, (np.generic, np.number)) else x
+            ).to_dict()
+        }
+        return summary
+    except Exception as e:
+        print(f"Error summarizing data: {e}")
+        return {}
 
 def save_plot(output_dir, filename, plot_func):
     """Save a plot using the provided plotting function."""
     path = os.path.join(output_dir, filename)
     try:
         plot_func()
-        plt.savefig(path)
+        plt.savefig(path, bbox_inches="tight")
         plt.close()
         return filename
     except Exception as e:
@@ -108,7 +112,7 @@ def generate_visualizations(df, output_dir):
     def create_pairplot():
         numeric_cols = df.select_dtypes(include=[np.number]).columns
         if len(numeric_cols) > 1:
-            sns.pairplot(df[numeric_cols].dropna())
+            sns.pairplot(df[numeric_cols].dropna(), diag_kind="kde")
             plt.suptitle("Pairplot of Numeric Features", y=1.02, fontsize=16)
 
     with ThreadPoolExecutor() as executor:
