@@ -32,7 +32,7 @@ console = Console()
 
 # Configure logging for tenacity
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(_name_)
+logger = logging.getLogger(__name__)
 
 # Configure OpenAI
 openai.api_key = os.environ.get("AIPROXY_TOKEN")
