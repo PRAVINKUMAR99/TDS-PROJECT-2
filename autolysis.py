@@ -49,7 +49,13 @@ except Exception as e:
 # Perform generic analysis
 summary = df.describe(include="all").transpose()
 missing_values = df.isnull().sum()
-correlation = df.corr() if df.select_dtypes(include=["number"]).shape[1] > 1 else None
+
+# Filter numeric columns for correlation calculation
+numeric_df = df.select_dtypes(include=["number"])
+if numeric_df.shape[1] > 1:
+    correlation = numeric_df.corr()
+else:
+    correlation = None
 
 # Function to query LLM
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
@@ -81,9 +87,9 @@ if correlation is not None:
     plt.close()
 
 # Example visualization: Distribution plot (dynamically selected column)
-for col in df.select_dtypes(include=["number"]):
+for col in numeric_df.columns:
     plt.figure(figsize=(8, 6))
-    sns.histplot(df[col].dropna(), kde=True)
+    sns.histplot(numeric_df[col].dropna(), kde=True)
     plt.title(f"Distribution of {col}")
     plt.savefig(f"distribution_{col}.png")
     plt.close()
@@ -103,7 +109,7 @@ with open("README.md", "w") as f:
     f.write("# Automated Analysis Report\n\n")
     f.write(story)
     f.write("\n\n![Correlation Heatmap](correlation_heatmap.png)\n")
-    for col in df.select_dtypes(include=["number"]):
+    for col in numeric_df.columns:
         f.write(f"![Distribution of {col}](distribution_{col}.png)\n")
 
 # Organize outputs into directories
@@ -111,7 +117,7 @@ output_dir = os.path.splitext(os.path.basename(dataset_path))[0]
 os.makedirs(output_dir, exist_ok=True)
 shutil.move("README.md", f"{output_dir}/README.md")
 shutil.move("correlation_heatmap.png", f"{output_dir}/correlation_heatmap.png")
-for col in df.select_dtypes(include=["number"]):
+for col in numeric_df.columns:
     shutil.move(f"distribution_{col}.png", f"{output_dir}/distribution_{col}.png")
 
 print(f"Analysis complete. Results saved in {output_dir}/")
