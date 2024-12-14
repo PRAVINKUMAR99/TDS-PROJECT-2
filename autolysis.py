@@ -88,6 +88,7 @@ else:
 # This function interacts with the OpenAI API to generate insights or narratives
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=2, max=20), reraise=True)
 def query_llm(prompt):
+    # This function queries the OpenAI API for narrative or analysis suggestions based on the provided prompt.
     try:
         openai.api_key = api_token
         response = openai.ChatCompletion.create(
@@ -128,6 +129,7 @@ def create_distribution_plots():
         num_unique = numeric_df[col].nunique()
         bins = 50 if num_unique > 100 else min(num_unique, 20)
 
+        # Explanation: Bin limits are chosen to balance detail and readability.
         plt.figure(figsize=(8, 6))
         sns.histplot(numeric_df[col].dropna(), kde=True, color="blue", bins=bins)
         plt.title(f"Distribution of {col}")
@@ -178,6 +180,28 @@ def pca_analysis():
         plt.savefig("pca_analysis.png")
         plt.close()
 
+# Dynamic LLM Interactions
+# Query the LLM dynamically after each major step and integrate its feedback
+try:
+    correlation_prompt = f"Analyze this correlation matrix: {correlation.to_dict() if correlation is not None else 'No correlations available.'}"
+    correlation_insights = query_llm(correlation_prompt)
+    print("Correlation Insights:", correlation_insights)
+
+    outlier_prompt = f"Outlier detection summary: {df['Outlier'].sum() if 'Outlier' in df else 'No outliers detected.'}"
+    outlier_insights = query_llm(outlier_prompt)
+    print("Outlier Insights:", outlier_insights)
+
+    clustering_prompt = f"Clustering results summary: {df['Cluster'].value_counts().to_dict() if 'Cluster' in df else 'No clusters formed.'}"
+    clustering_insights = query_llm(clustering_prompt)
+    print("Clustering Insights:", clustering_insights)
+
+    pca_prompt = "Provide insights on PCA results and explain their significance."
+    pca_insights = query_llm(pca_prompt)
+    print("PCA Insights:", pca_insights)
+
+except Exception as e:
+    print(f"Error during dynamic LLM interactions: {e}")
+
 # Use ThreadPoolExecutor to create visualizations concurrently
 with ThreadPoolExecutor() as executor:
     executor.submit(create_correlation_heatmap)
@@ -198,10 +222,10 @@ Based on the following details, create a Markdown-formatted report:
 - **Missing Values**: Columns with missing values and their counts:
   {missing_values[missing_values > 0].to_dict()}.
 - **Key Findings**:
-  - **Correlation Analysis**: {correlation.idxmax().to_dict() if correlation is not None else 'No significant correlations found.'}
-  - **Outlier Detection**: Detected {df['Outlier'].sum() if 'Outlier' in df else 'N/A'} outliers, which may indicate anomalies or unique patterns.
-  - **Clustering Analysis**: {df['Cluster'].value_counts().to_dict() if 'Cluster' in df else 'Clustering not performed due to data limitations.'}
-  - **PCA Analysis**: {'Explained variance by PCA components: ' + str(PCA().fit(numeric_df).explained_variance_ratio_) if 'PCA1' in df else 'PCA not applicable.'}
+  - **Correlation Insights**: {correlation_insights}
+  - **Outlier Detection**: {outlier_insights}
+  - **Clustering Analysis**: {clustering_insights}
+  - **PCA Analysis**: {pca_insights}
 
 Report should include:
 1. **Overview of the Dataset**: Include a brief description of the dataset and its features.
@@ -231,23 +255,4 @@ with open(readme_path, "w") as f:
     f.write("![Correlation Heatmap](correlation_heatmap.png)\n")
     for col in numeric_df.columns:
         f.write(f"![Distribution of {col}](distribution_{col}.png)\n")
-    f.write("![Outlier Detection](outlier_detection.png)\n")
-    f.write("![Clustering Analysis](clustering_analysis.png)\n")
-    f.write("![PCA Analysis](pca_analysis.png)\n")
-
-# Ensure all outputs are in the specified directories
-# Move generated files to the output directory
-def safe_move(src, dst):
-    """Move a file only if it exists."""
-    if os.path.exists(src):
-        shutil.move(src, dst)
-
-safe_move("correlation_heatmap.png", os.path.join(output_dir, "correlation_heatmap.png"))
-safe_move("outlier_detection.png", os.path.join(output_dir, "outlier_detection.png"))
-safe_move("clustering_analysis.png", os.path.join(output_dir, "clustering_analysis.png"))
-safe_move("pca_analysis.png", os.path.join(output_dir, "pca_analysis.png"))
-for col in numeric_df.columns:
-    distribution_plot = f"distribution_{col}.png"
-    safe_move(distribution_plot, os.path.join(output_dir, distribution_plot))
-
-print(f"Analysis complete. Results saved in {output_dir}/")
+    f.write("![Outlier Detection](outlier_detection.png)
