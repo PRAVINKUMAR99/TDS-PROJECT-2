@@ -249,6 +249,11 @@ except Exception as e:
 output_dir = os.path.splitext(os.path.basename(dataset_path))[0]
 os.makedirs(output_dir, exist_ok=True)
 readme_path = os.path.join(output_dir, "README.md")
+# Save narrative to README.md in the appropriate directory
+# The README file includes the generated narrative and links to visualizations
+output_dir = os.path.splitext(os.path.basename(dataset_path))[0]
+os.makedirs(output_dir, exist_ok=True)
+readme_path = os.path.join(output_dir, "README.md")
 with open(readme_path, "w") as f:
     f.write("# Automated Analysis Report\n\n")
     f.write(story)
