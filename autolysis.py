@@ -86,8 +86,6 @@ else:
 
 # Function to query LLM with enhanced error handling and logging
 # This function interacts with the OpenAI API to generate insights or narratives
-from openai import error
-
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=2, max=20), reraise=True)
 def query_llm(prompt):
     # This function queries the OpenAI API for narrative or analysis suggestions based on the provided prompt.
@@ -105,16 +103,16 @@ def query_llm(prompt):
             return response["choices"][0]["message"]["content"]
         else:
             raise ValueError("Invalid response structure from OpenAI API.")
-    except error.AuthenticationError:
+    except openai.AuthenticationError:
         print("Error: Authentication failed. Check your API token.")
         raise
-    except error.RateLimitError:
+    except openai.RateLimitError:
         print("Error: Rate limit exceeded. Try again later.")
         raise
-    except error.APIError as e:
+    except openai.APIError as e:
         print(f"API Error: {e}")
         raise
-    except error.InvalidRequestError as e:
+    except openai.InvalidRequestError as e:
         print(f"Invalid Request: {e}")
         raise
     except Exception as e:
@@ -212,14 +210,17 @@ try:
 
 except Exception as e:
     print(f"Error during dynamic LLM interactions: {e}")
-    with ThreadPoolExecutor() as executor:
+
+# Use ThreadPoolExecutor to create visualizations concurrently
+with ThreadPoolExecutor() as executor:
     executor.submit(create_correlation_heatmap)
     executor.submit(create_distribution_plots)
     executor.submit(outlier_detection)
     executor.submit(clustering_analysis)
     executor.submit(pca_analysis)
 
-
+# Generate narrative with robust prompt
+# Create a detailed Markdown-formatted report summarizing the analysis
 narrative_prompt = f"""
 You are a data storytelling assistant.
 Based on the following details, create a Markdown-formatted report:
@@ -232,19 +233,8 @@ Based on the following details, create a Markdown-formatted report:
 - **Key Findings**:
   - **Correlation Insights**: {correlation_insights if 'correlation_insights' in locals() else "No correlation insights available."}
   - **Outlier Detection**: {outlier_insights if 'outlier_insights' in locals() else "No outlier insights available."}
-  - **Clustering Analysis**: {clustering_insights if 'clustering_insights' in locals() else "No clustering insights available."}
-  - **PCA Analysis**: {pca_insights if 'pca_insights' in locals() else "No PCA insights available."}
+  - **Clustering
 
-Report should include:
-1. **Overview of the Dataset**: Include a brief description of the dataset and its features.
-2. **Key Findings from the Analysis**: Highlight major trends, patterns, and anomalies in the dataset, including insights from correlation, clustering, and PCA.
-3. **Visualizations**: Provide clear explanations for the visualizations created, including statistical methods and advanced analyses.
-4. **Actionable Insights and Recommendations**: Suggest practical steps or decisions based on the analysis results.
-5. **Summary of Data Issues**: Note any missing data, outliers, or potential quality concerns.
-6. **Next Steps**: Recommend further analyses, cleaning, or data collection to improve the dataset.
-
-Use bullet points, subheaders, and bold text where applicable to make the report structured and easy to read.
-"""
 try:
     story = query_llm(narrative_prompt)
 except Exception as e:
