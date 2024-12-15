@@ -4,7 +4,7 @@
 #   "pandas",
 #   "matplotlib",
 #   "seaborn",
-#   "openai>=0.27.0",
+#   "openai",
 #   "tenacity",
 #   "scikit-learn"
 # ]
