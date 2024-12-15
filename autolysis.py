@@ -203,6 +203,7 @@ except Exception as e:
     print(f"Error during dynamic LLM interactions: {e}")
 
 # Use ThreadPoolExecutor to create visualizations concurrently
+# Use ThreadPoolExecutor to create visualizations concurrently
 with ThreadPoolExecutor() as executor:
     executor.submit(create_correlation_heatmap)
     executor.submit(create_distribution_plots)
@@ -222,10 +223,10 @@ Based on the following details, create a Markdown-formatted report:
 - **Missing Values**: Columns with missing values and their counts:
   {missing_values[missing_values > 0].to_dict()}.
 - **Key Findings**:
-  - **Correlation Insights**: {correlation_insights}
-  - **Outlier Detection**: {outlier_insights}
-  - **Clustering Analysis**: {clustering_insights}
-  - **PCA Analysis**: {pca_insights}
+  - **Correlation Insights**: {correlation_insights if 'correlation_insights' in locals() else "No correlation insights available."}
+  - **Outlier Detection**: {outlier_insights if 'outlier_insights' in locals() else "No outlier insights available."}
+  - **Clustering Analysis**: {clustering_insights if 'clustering_insights' in locals() else "No clustering insights available."}
+  - **PCA Analysis**: {pca_insights if 'pca_insights' in locals() else "No PCA insights available."}
 
 Report should include:
 1. **Overview of the Dataset**: Include a brief description of the dataset and its features.
@@ -245,8 +246,6 @@ except Exception as e:
 
 # Save narrative to README.md in the appropriate directory
 # The README file includes the generated narrative and links to visualizations
-# Save narrative to README.md in the appropriate directory
-# The README file includes the generated narrative and links to visualizations
 output_dir = os.path.splitext(os.path.basename(dataset_path))[0]
 os.makedirs(output_dir, exist_ok=True)
 readme_path = os.path.join(output_dir, "README.md")
@@ -261,4 +260,19 @@ with open(readme_path, "w") as f:
     f.write("![Clustering Analysis](clustering_analysis.png)\n")
     f.write("![PCA Analysis](pca_analysis.png)\n")
 
+# Ensure all outputs are in the specified directories
+# Move generated files to the output directory
+def safe_move(src, dst):
+    """Move a file only if it exists."""
+    if os.path.exists(src):
+        shutil.move(src, dst)
 
+safe_move("correlation_heatmap.png", os.path.join(output_dir, "correlation_heatmap.png"))
+safe_move("outlier_detection.png", os.path.join(output_dir, "outlier_detection.png"))
+safe_move("clustering_analysis.png", os.path.join(output_dir, "clustering_analysis.png"))
+safe_move("pca_analysis.png", os.path.join(output_dir, "pca_analysis.png"))
+for col in numeric_df.columns:
+    distribution_plot = f"distribution_{col}.png"
+    safe_move(distribution_plot, os.path.join(output_dir, distribution_plot))
+
+print(f"Analysis complete. Results saved in {output_dir}/")
