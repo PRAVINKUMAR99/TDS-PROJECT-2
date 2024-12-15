@@ -86,35 +86,39 @@ else:
 
 # Function to query LLM with enhanced error handling and logging
 # This function interacts with the OpenAI API to generate insights or narratives
+from openai.error import AuthenticationError, RateLimitError, APIError, InvalidRequestError
+
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=2, max=20), reraise=True)
 def query_llm(prompt):
+    # This function queries the OpenAI API for narrative or analysis suggestions based on the provided prompt.
     try:
         openai.api_key = api_token
         response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
+            model="gpt-4",  # Adjusted model to "gpt-4" for compatibility
             messages=[
                 {"role": "system", "content": "You are a helpful assistant for data analysis."},
                 {"role": "user", "content": prompt}
             ]
         )
+        # Validate response structure
         if "choices" in response and response["choices"]:
             return response["choices"][0]["message"]["content"]
         else:
             raise ValueError("Invalid response structure from OpenAI API.")
     except AuthenticationError:
-        print("OpenAI API authentication failed. Check your API key.")
+        print("Error: Authentication failed. Check your API token.")
         raise
     except RateLimitError:
-        print("Rate limit exceeded. Try again later.")
+        print("Error: Rate limit exceeded. Try again later.")
         raise
     except APIError as e:
-        print(f"OpenAI API error: {e}")
+        print(f"API Error: {e}")
         raise
     except InvalidRequestError as e:
-        print(f"Invalid request to OpenAI API: {e}")
+        print(f"Invalid Request: {e}")
         raise
     except Exception as e:
-        print(f"Unexpected error during LLM interaction: {e}")
+        print(f"Unexpected error: {e}")
         raise
 
 # Advanced Analysis Functions
@@ -210,7 +214,6 @@ except Exception as e:
     print(f"Error during dynamic LLM interactions: {e}")
 
 # Use ThreadPoolExecutor to create visualizations concurrently
-# Use ThreadPoolExecutor to create visualizations concurrently
 with ThreadPoolExecutor() as executor:
     executor.submit(create_correlation_heatmap)
     executor.submit(create_distribution_plots)
@@ -283,4 +286,3 @@ for col in numeric_df.columns:
     safe_move(distribution_plot, os.path.join(output_dir, distribution_plot))
 
 print(f"Analysis complete. Results saved in {output_dir}/")
-
