@@ -4,12 +4,12 @@
 #   "pandas",
 #   "matplotlib",
 #   "seaborn",
-#   "openai",
+#   "openai>=0.27.0",
 #   "tenacity",
 #   "scikit-learn"
 # ]
 # ///
-!pip install openai
+
 import os
 import sys
 import pandas as pd
@@ -92,7 +92,7 @@ def query_llm(prompt):
     try:
         openai.api_key = api_token
         response = openai.ChatCompletion.create(
-            model="gpt-4",  # Adjusted model to "gpt-4" for compatibility
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant for data analysis."},
                 {"role": "user", "content": prompt}
@@ -104,12 +104,11 @@ def query_llm(prompt):
         else:
             raise ValueError("Invalid response structure from OpenAI API.")
     except openai.error.OpenAIError as e:
-        print(f"OpenAI API Error: {e}")
+        print(f"OpenAI API error: {e}")
         raise
     except Exception as e:
         print(f"Unexpected error: {e}")
         raise
-
 
 # Advanced Analysis Functions
 # Create a correlation heatmap to visualize relationships between numeric features
@@ -223,10 +222,21 @@ Based on the following details, create a Markdown-formatted report:
 - **Missing Values**: Columns with missing values and their counts:
   {missing_values[missing_values > 0].to_dict()}.
 - **Key Findings**:
-  - **Correlation Insights**: {correlation_insights if 'correlation_insights' in locals() else "No correlation insights available."}
-  - **Outlier Detection**: {outlier_insights if 'outlier_insights' in locals() else "No outlier insights available."}
-  - **Clustering
+  - **Correlation Insights**: {correlation_insights}
+  - **Outlier Detection**: {outlier_insights}
+  - **Clustering Analysis**: {clustering_insights}
+  - **PCA Analysis**: {pca_insights}
 
+Report should include:
+1. **Overview of the Dataset**: Include a brief description of the dataset and its features.
+2. **Key Findings from the Analysis**: Highlight major trends, patterns, and anomalies in the dataset, including insights from correlation, clustering, and PCA.
+3. **Visualizations**: Provide clear explanations for the visualizations created, including statistical methods and advanced analyses.
+4. **Actionable Insights and Recommendations**: Suggest practical steps or decisions based on the analysis results.
+5. **Summary of Data Issues**: Note any missing data, outliers, or potential quality concerns.
+6. **Next Steps**: Recommend further analyses, cleaning, or data collection to improve the dataset.
+
+Use bullet points, subheaders, and bold text where applicable to make the report structured and easy to read.
+"""
 try:
     story = query_llm(narrative_prompt)
 except Exception as e:
@@ -245,23 +255,4 @@ with open(readme_path, "w") as f:
     f.write("![Correlation Heatmap](correlation_heatmap.png)\n")
     for col in numeric_df.columns:
         f.write(f"![Distribution of {col}](distribution_{col}.png)\n")
-    f.write("![Outlier Detection](outlier_detection.png)\n")
-    f.write("![Clustering Analysis](clustering_analysis.png)\n")
-    f.write("![PCA Analysis](pca_analysis.png)\n")
-
-# Ensure all outputs are in the specified directories
-# Move generated files to the output directory
-def safe_move(src, dst):
-    """Move a file only if it exists."""
-    if os.path.exists(src):
-        shutil.move(src, dst)
-
-safe_move("correlation_heatmap.png", os.path.join(output_dir, "correlation_heatmap.png"))
-safe_move("outlier_detection.png", os.path.join(output_dir, "outlier_detection.png"))
-safe_move("clustering_analysis.png", os.path.join(output_dir, "clustering_analysis.png"))
-safe_move("pca_analysis.png", os.path.join(output_dir, "pca_analysis.png"))
-for col in numeric_df.columns:
-    distribution_plot = f"distribution_{col}.png"
-    safe_move(distribution_plot, os.path.join(output_dir, distribution_plot))
-
-print(f"Analysis complete. Results saved in {output_dir}/")
+    f.write("![Outlier Detection](outlier_detection.png)
