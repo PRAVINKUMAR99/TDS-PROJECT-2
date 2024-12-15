@@ -6,12 +6,14 @@
 #   "seaborn",
 #   "openai==0.28.0",
 #   "tenacity",
-#   "scikit-learn"
+#   "scikit-learn",
+#   "base64"
 # ]
 # ///
 
 import os
 import sys
+import base64
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -114,24 +116,33 @@ def query_llm(prompt):
         print(f"Unexpected error: {e}")
         raise
 
-# Function to query the embedding model
+# Function to analyze visualizations via vision model
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=2, max=20), reraise=True)
-def query_embedding(input_text):
+def query_visual_insights(image_path, description):
     """
-    Query the text-embedding-3-small model to generate embeddings for the provided input text.
+    Query vision model for insights on the provided image.
     """
     try:
         openai.api_base = "https://aiproxy.sanand.workers.dev/openai/v1"
         openai.api_key = api_token
 
-        response = openai.Embedding.create(
-            model="text-embedding-3-small",
-            input=input_text
+        # Encode the image as Base64
+        with open(image_path, "rb") as image_file:
+            image_data = base64.b64encode(image_file.read()).decode("utf-8")
+
+        # Query the vision model
+        response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert data visualization analyst."},
+                {"role": "user", "content": f"Analyze the following visualization: {description}"},
+                {"role": "user", "content": image_data}
+            ]
         )
 
-        # Validate response structure and return embeddings
-        if "data" in response and response["data"]:
-            return response["data"][0]["embedding"]
+        # Validate response structure and return insights
+        if "choices" in response and response["choices"]:
+            return response["choices"][0]["message"]["content"]
         else:
             raise ValueError("Invalid response structure from OpenAI API.")
     except openai.error.OpenAIError as e:
@@ -141,14 +152,16 @@ def query_embedding(input_text):
         print(f"Unexpected error: {e}")
         raise
 
-# Example usage of the embedding functionality
+# Example usage of vision insights
 try:
-    sample_text = "Analyze this text for embeddings."
-    print(f"Generating embeddings for: {sample_text}")
-    embeddings = query_embedding(sample_text)
-    print("Embeddings generated successfully:", embeddings[:10])  # Display first 10 values for brevity
+    test_image_path = "correlation_heatmap.png"
+    if os.path.exists(test_image_path):
+        print(f"Querying vision insights for: {test_image_path}")
+        vision_description = "Correlation Heatmap showing relationships between numeric variables."
+        vision_insights = query_visual_insights(test_image_path, vision_description)
+        print("Vision Insights:", vision_insights)
 except Exception as e:
-    print(f"Error during embedding generation: {e}")
+    print(f"Error during vision analysis: {e}")
 
 # Advanced Analysis Functions
 # Create a correlation heatmap to visualize relationships between numeric features
@@ -220,28 +233,6 @@ def pca_analysis():
         plt.savefig("pca_analysis.png")
         plt.close()
 
-# Dynamic LLM Interactions
-# Query the LLM dynamically after each major step and integrate its feedback
-try:
-    correlation_prompt = f"Analyze this correlation matrix: {correlation.to_dict() if correlation is not None else 'No correlations available.'}"
-    correlation_insights = query_llm(correlation_prompt)
-    print("Correlation Insights:", correlation_insights)
-
-    outlier_prompt = f"Outlier detection summary: {df['Outlier'].sum() if 'Outlier' in df else 'No outliers detected.'}"
-    outlier_insights = query_llm(outlier_prompt)
-    print("Outlier Insights:", outlier_insights)
-
-    clustering_prompt = f"Clustering results summary: {df['Cluster'].value_counts().to_dict() if 'Cluster' in df else 'No clusters formed.'}"
-    clustering_insights = query_llm(clustering_prompt)
-    print("Clustering Insights:", clustering_insights)
-
-    pca_prompt = "Provide insights on PCA results and explain their significance."
-    pca_insights = query_llm(pca_prompt)
-    print("PCA Insights:", pca_insights)
-
-except Exception as e:
-    print(f"Error during dynamic LLM interactions: {e}")
-
 # Use ThreadPoolExecutor to create visualizations concurrently
 with ThreadPoolExecutor() as executor:
     executor.submit(create_correlation_heatmap)
@@ -250,35 +241,68 @@ with ThreadPoolExecutor() as executor:
     executor.submit(clustering_analysis)
     executor.submit(pca_analysis)
 
-# Generate README.md file dynamically
+# Generate narrative with robust prompt
+# Create a detailed Markdown-formatted report summarizing the analysis
+narrative_prompt = f"""
+You are a data storytelling assistant.
+Based on the following details, create a Markdown-formatted report:
+
+- **Dataset Overview**: The dataset contains {df.shape[0]} rows and {df.shape[1]} columns. Columns include: {list(df.columns)}.
+- **Summary Statistics**: Key descriptive statistics include:
+  {summary[['mean', 'std', 'min', 'max']].to_dict()}.
+- **Missing Values**: Columns with missing values and their counts:
+  {missing_values[missing_values > 0].to_dict()}.
+- **Key Findings**:
+  - **Correlation Analysis**: {correlation.idxmax().to_dict() if correlation is not None else 'No significant correlations found.'}
+  - **Outlier Detection**: Detected {df['Outlier'].sum() if 'Outlier' in df else 'N/A'} outliers, which may indicate anomalies or unique patterns.
+  - **Clustering Analysis**: {df['Cluster'].value_counts().to_dict() if 'Cluster' in df else 'Clustering not performed due to data limitations.'}
+  - **PCA Analysis**: {'Explained variance by PCA components: ' + str(PCA().fit(numeric_df).explained_variance_ratio_) if 'PCA1' in df else 'PCA not applicable.'}
+
+Report should include:
+1. **Overview of the Dataset**: Include a brief description of the dataset and its features.
+2. **Key Findings from the Analysis**: Highlight major trends, patterns, and anomalies in the dataset, including insights from correlation, clustering, and PCA.
+3. **Visualizations**: Provide clear explanations for the visualizations created, including statistical methods and advanced analyses.
+4. **Actionable Insights and Recommendations**: Suggest practical steps or decisions based on the analysis results.
+5. **Summary of Data Issues**: Note any missing data, outliers, or potential quality concerns.
+6. **Next Steps**: Recommend further analyses, cleaning, or data collection to improve the dataset.
+
+Use bullet points, subheaders, and bold text where applicable to make the report structured and easy to read.
+"""
+try:
+    story = query_llm(narrative_prompt)
+except Exception as e:
+    print(f"Failed to generate narrative from LLM: {e}")
+    story = "Unable to generate narrative due to API issues."
+
+# Save narrative to README.md in the appropriate directory
+# The README file includes the generated narrative and links to visualizations
 output_dir = os.path.splitext(os.path.basename(dataset_path))[0]
 os.makedirs(output_dir, exist_ok=True)
 readme_path = os.path.join(output_dir, "README.md")
+with open(readme_path, "w") as f:
+    f.write("# Automated Analysis Report\n\n")
+    f.write(story)
+    f.write("\n\n## Visualizations\n")
+    f.write("![Correlation Heatmap](correlation_heatmap.png)\n")
+    for col in numeric_df.columns:
+        f.write(f"![Distribution of {col}](distribution_{col}.png)\n")
+    f.write("![Outlier Detection](outlier_detection.png)\n")
+    f.write("![Clustering Analysis](clustering_analysis.png)\n")
+    f.write("![PCA Analysis](pca_analysis.png)\n")
 
-try:
-    with open(readme_path, "w") as readme_file:
-        readme_file.write("# Automated Analysis Report\n\n")
-        readme_file.write("## Dataset Overview\n")
-        readme_file.write(f"- Rows: {df.shape[0]}\n")
-        readme_file.write(f"- Columns: {df.shape[1]}\n")
-        readme_file.write(f"- Missing Values: {missing_values[missing_values > 0].to_dict()}\n\n")
+# Ensure all outputs are in the specified directories
+# Move generated files to the output directory
+def safe_move(src, dst):
+    """Move a file only if it exists."""
+    if os.path.exists(src):
+        shutil.move(src, dst)
 
-        readme_file.write("## Analysis Insights\n")
-        readme_file.write(f"### Correlation Analysis\n{correlation_insights}\n\n")
-        readme_file.write(f"### Outlier Detection\n{outlier_insights}\n\n")
-        readme_file.write(f"### Clustering Analysis\n{clustering_insights}\n\n")
-        readme_file.write(f"### PCA Analysis\n{pca_insights}\n\n")
+safe_move("correlation_heatmap.png", os.path.join(output_dir, "correlation_heatmap.png"))
+safe_move("outlier_detection.png", os.path.join(output_dir, "outlier_detection.png"))
+safe_move("clustering_analysis.png", os.path.join(output_dir, "clustering_analysis.png"))
+safe_move("pca_analysis.png", os.path.join(output_dir, "pca_analysis.png"))
+for col in numeric_df.columns:
+    distribution_plot = f"distribution_{col}.png"
+    safe_move(distribution_plot, os.path.join(output_dir, distribution_plot))
 
-        readme_file.write("## Visualizations\n")
-        readme_file.write("![Correlation Heatmap](correlation_heatmap.png)\n")
-        for col in numeric_df.columns:
-            readme_file.write(f"![Distribution of {col}](distribution_{col}.png)\n")
-        readme_file.write("![Outlier Detection](outlier_detection.png)\n")
-        readme_file.write("![Clustering Analysis](clustering_analysis.png)\n")
-        readme_file.write("![PCA Analysis](pca_analysis.png)\n")
-
-    print(f"README.md generated at {readme_path}")
-except Exception as e:
-    print(f"Error generating README.md: {e}")
-
-print("Analysis completed. Check generated visualizations and insights.")
+print(f"Analysis complete. Results saved in {output_dir}/")
