@@ -88,7 +88,6 @@ else:
 # This function interacts with the OpenAI API to generate insights or narratives
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=2, max=20), reraise=True)
 def query_llm(prompt):
-    # This function queries the OpenAI API for narrative or analysis suggestions based on the provided prompt.
     try:
         openai.api_key = api_token
         response = openai.ChatCompletion.create(
@@ -98,16 +97,24 @@ def query_llm(prompt):
                 {"role": "user", "content": prompt}
             ]
         )
-        # Validate response structure
         if "choices" in response and response["choices"]:
             return response["choices"][0]["message"]["content"]
         else:
             raise ValueError("Invalid response structure from OpenAI API.")
-    except openai.error.OpenAIError as e:
+    except AuthenticationError:
+        print("OpenAI API authentication failed. Check your API key.")
+        raise
+    except RateLimitError:
+        print("Rate limit exceeded. Try again later.")
+        raise
+    except APIError as e:
         print(f"OpenAI API error: {e}")
         raise
+    except InvalidRequestError as e:
+        print(f"Invalid request to OpenAI API: {e}")
+        raise
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        print(f"Unexpected error during LLM interaction: {e}")
         raise
 
 # Advanced Analysis Functions
