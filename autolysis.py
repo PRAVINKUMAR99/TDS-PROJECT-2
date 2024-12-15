@@ -103,21 +103,13 @@ def query_llm(prompt):
             return response["choices"][0]["message"]["content"]
         else:
             raise ValueError("Invalid response structure from OpenAI API.")
-    except openai.AuthenticationError:
-        print("Error: Authentication failed. Check your API token.")
-        raise
-    except openai.RateLimitError:
-        print("Error: Rate limit exceeded. Try again later.")
-        raise
-    except openai.APIError as e:
-        print(f"API Error: {e}")
-        raise
-    except openai.InvalidRequestError as e:
-        print(f"Invalid Request: {e}")
+    except openai.error.OpenAIError as e:
+        print(f"OpenAI API Error: {e}")
         raise
     except Exception as e:
         print(f"Unexpected error: {e}")
         raise
+
 
 # Advanced Analysis Functions
 # Create a correlation heatmap to visualize relationships between numeric features
