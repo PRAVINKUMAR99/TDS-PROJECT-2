@@ -9,7 +9,7 @@
 #   "scikit-learn"
 # ]
 # ///
-
+!pip install openai
 import os
 import sys
 import pandas as pd
