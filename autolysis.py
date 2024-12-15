@@ -89,6 +89,7 @@ else:
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=2, max=20), reraise=True)
 def query_llm(prompt):
     # This function queries the OpenAI API for narrative or analysis suggestions based on the provided prompt.
+def query_llm(prompt):
     try:
         openai.api_key = api_token
         response = openai.ChatCompletion.create(
@@ -98,18 +99,19 @@ def query_llm(prompt):
                 {"role": "user", "content": prompt}
             ]
         )
-        # Validate response structure
+        # Ensure a valid response structure
         if "choices" in response and response["choices"]:
             return response["choices"][0]["message"]["content"]
         else:
-            raise ValueError("Invalid response structure from OpenAI API.")
+            raise ValueError("Invalid response structure.")
+    except openai.error.AuthenticationError:
+        return "Authentication error: Please check your API key."
     except openai.error.OpenAIError as e:
-        print(f"OpenAI API error: {e}")
-        raise
+        print(f"OpenAI API Error: {e}")
+        return "Error: Unable to query the LLM."
     except Exception as e:
         print(f"Unexpected error: {e}")
-        raise
-
+        return "Unexpected error occurred."
 # Advanced Analysis Functions
 # Create a correlation heatmap to visualize relationships between numeric features
 def create_correlation_heatmap():
