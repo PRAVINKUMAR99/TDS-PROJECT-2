@@ -90,7 +90,7 @@ else:
 def query_llm(prompt):
     # This function queries the OpenAI API for narrative or analysis suggestions based on the provided prompt.
     try:
-        openai.api_base = "https://aiproxy.sanand.workers.dev/openai/v1"
+        openai.api_base = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
         openai.api_key = api_token
         response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
