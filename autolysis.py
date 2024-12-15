@@ -250,4 +250,35 @@ with ThreadPoolExecutor() as executor:
     executor.submit(clustering_analysis)
     executor.submit(pca_analysis)
 
+# Generate README.md file dynamically
+output_dir = os.path.splitext(os.path.basename(dataset_path))[0]
+os.makedirs(output_dir, exist_ok=True)
+readme_path = os.path.join(output_dir, "README.md")
+
+try:
+    with open(readme_path, "w") as readme_file:
+        readme_file.write("# Automated Analysis Report\n\n")
+        readme_file.write("## Dataset Overview\n")
+        readme_file.write(f"- Rows: {df.shape[0]}\n")
+        readme_file.write(f"- Columns: {df.shape[1]}\n")
+        readme_file.write(f"- Missing Values: {missing_values[missing_values > 0].to_dict()}\n\n")
+
+        readme_file.write("## Analysis Insights\n")
+        readme_file.write(f"### Correlation Analysis\n{correlation_insights}\n\n")
+        readme_file.write(f"### Outlier Detection\n{outlier_insights}\n\n")
+        readme_file.write(f"### Clustering Analysis\n{clustering_insights}\n\n")
+        readme_file.write(f"### PCA Analysis\n{pca_insights}\n\n")
+
+        readme_file.write("## Visualizations\n")
+        readme_file.write("![Correlation Heatmap](correlation_heatmap.png)\n")
+        for col in numeric_df.columns:
+            readme_file.write(f"![Distribution of {col}](distribution_{col}.png)\n")
+        readme_file.write("![Outlier Detection](outlier_detection.png)\n")
+        readme_file.write("![Clustering Analysis](clustering_analysis.png)\n")
+        readme_file.write("![PCA Analysis](pca_analysis.png)\n")
+
+    print(f"README.md generated at {readme_path}")
+except Exception as e:
+    print(f"Error generating README.md: {e}")
+
 print("Analysis completed. Check generated visualizations and insights.")
