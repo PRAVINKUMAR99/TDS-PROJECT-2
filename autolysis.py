@@ -88,18 +88,21 @@ else:
 # This function interacts with the OpenAI API to generate insights or narratives
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=2, max=20), reraise=True)
 def query_llm(prompt):
-    # This function queries the OpenAI API for narrative or analysis suggestions based on the provided prompt.
     try:
+        # Set OpenAI API base and key for requests
         openai.api_base = "https://aiproxy.sanand.workers.dev/openai/v1"
         openai.api_key = api_token
+
+        # Make a request to the OpenAI API with the specified prompt
         response = openai.ChatCompletion.create(
-            model="gpt-4o-mini", "text-embedding-3-small",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant for data analysis."},
                 {"role": "user", "content": prompt}
             ]
         )
-        # Validate response structure
+
+        # Validate response structure and return content
         if "choices" in response and response["choices"]:
             return response["choices"][0]["message"]["content"]
         else:
@@ -110,6 +113,43 @@ def query_llm(prompt):
     except Exception as e:
         print(f"Unexpected error: {e}")
         raise
+
+# Function to query the embedding model
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=2, max=20), reraise=True)
+def query_embedding(input_text):
+    """
+    Query the text-embedding-3-small model to generate embeddings for the provided input text.
+    """
+    try:
+        openai.api_base = "https://aiproxy.sanand.workers.dev/openai/v1"
+        openai.api_key = api_token
+
+        response = openai.Embedding.create(
+            model="text-embedding-3-small",
+            input=input_text
+        )
+
+        # Validate response structure and return embeddings
+        if "data" in response and response["data"]:
+            return response["data"][0]["embedding"]
+        else:
+            raise ValueError("Invalid response structure from OpenAI API.")
+    except openai.error.OpenAIError as e:
+        print(f"OpenAI API error: {e}")
+        raise
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        raise
+
+# Example usage of the embedding functionality
+try:
+    sample_text = "Analyze this text for embeddings."
+    print(f"Generating embeddings for: {sample_text}")
+    embeddings = query_embedding(sample_text)
+    print("Embeddings generated successfully:", embeddings[:10])  # Display first 10 values for brevity
+except Exception as e:
+    print(f"Error during embedding generation: {e}")
+
 # Advanced Analysis Functions
 # Create a correlation heatmap to visualize relationships between numeric features
 def create_correlation_heatmap():
@@ -203,7 +243,6 @@ except Exception as e:
     print(f"Error during dynamic LLM interactions: {e}")
 
 # Use ThreadPoolExecutor to create visualizations concurrently
-# Use ThreadPoolExecutor to create visualizations concurrently
 with ThreadPoolExecutor() as executor:
     executor.submit(create_correlation_heatmap)
     executor.submit(create_distribution_plots)
@@ -211,73 +250,4 @@ with ThreadPoolExecutor() as executor:
     executor.submit(clustering_analysis)
     executor.submit(pca_analysis)
 
-# Generate narrative with robust prompt
-# Create a detailed Markdown-formatted report summarizing the analysis
-narrative_prompt = f"""
-You are a data storytelling assistant.
-Based on the following details, create a Markdown-formatted report:
-
-- **Dataset Overview**: The dataset contains {df.shape[0]} rows and {df.shape[1]} columns. Columns include: {list(df.columns)}.
-- **Summary Statistics**: Key descriptive statistics include:
-  {summary[['mean', 'std', 'min', 'max']].to_dict()}.
-- **Missing Values**: Columns with missing values and their counts:
-  {missing_values[missing_values > 0].to_dict()}.
-- **Key Findings**:
-  - **Correlation Insights**: {correlation_insights if 'correlation_insights' in locals() else "No correlation insights available."}
-  - **Outlier Detection**: {outlier_insights if 'outlier_insights' in locals() else "No outlier insights available."}
-  - **Clustering Analysis**: {clustering_insights if 'clustering_insights' in locals() else "No clustering insights available."}
-  - **PCA Analysis**: {pca_insights if 'pca_insights' in locals() else "No PCA insights available."}
-
-Report should include:
-1. **Overview of the Dataset**: Include a brief description of the dataset and its features.
-2. **Key Findings from the Analysis**: Highlight major trends, patterns, and anomalies in the dataset, including insights from correlation, clustering, and PCA.
-3. **Visualizations**: Provide clear explanations for the visualizations created, including statistical methods and advanced analyses.
-4. **Actionable Insights and Recommendations**: Suggest practical steps or decisions based on the analysis results.
-5. **Summary of Data Issues**: Note any missing data, outliers, or potential quality concerns.
-6. **Next Steps**: Recommend further analyses, cleaning, or data collection to improve the dataset.
-
-Use bullet points, subheaders, and bold text where applicable to make the report structured and easy to read.
-"""
-try:
-    story = query_llm(narrative_prompt)
-except Exception as e:
-    print(f"Failed to generate narrative from LLM: {e}")
-    story = "Unable to generate narrative due to API issues."
-
-# Save narrative to README.md in the appropriate directory
-# The README file includes the generated narrative and links to visualizations
-output_dir = os.path.splitext(os.path.basename(dataset_path))[0]
-os.makedirs(output_dir, exist_ok=True)
-readme_path = os.path.join(output_dir, "README.md")
-# Save narrative to README.md in the appropriate directory
-# The README file includes the generated narrative and links to visualizations
-output_dir = os.path.splitext(os.path.basename(dataset_path))[0]
-os.makedirs(output_dir, exist_ok=True)
-readme_path = os.path.join(output_dir, "README.md")
-with open(readme_path, "w") as f:
-    f.write("# Automated Analysis Report\n\n")
-    f.write(story)
-    f.write("\n\n## Visualizations\n")
-    f.write("![Correlation Heatmap](correlation_heatmap.png)\n")
-    for col in numeric_df.columns:
-        f.write(f"![Distribution of {col}](distribution_{col}.png)\n")
-    f.write("![Outlier Detection](outlier_detection.png)\n")
-    f.write("![Clustering Analysis](clustering_analysis.png)\n")
-    f.write("![PCA Analysis](pca_analysis.png)\n")
-
-# Ensure all outputs are in the specified directories
-# Move generated files to the output directory
-def safe_move(src, dst):
-    """Move a file only if it exists."""
-    if os.path.exists(src):
-        shutil.move(src, dst)
-
-safe_move("correlation_heatmap.png", os.path.join(output_dir, "correlation_heatmap.png"))
-safe_move("outlier_detection.png", os.path.join(output_dir, "outlier_detection.png"))
-safe_move("clustering_analysis.png", os.path.join(output_dir, "clustering_analysis.png"))
-safe_move("pca_analysis.png", os.path.join(output_dir, "pca_analysis.png"))
-for col in numeric_df.columns:
-    distribution_plot = f"distribution_{col}.png"
-    safe_move(distribution_plot, os.path.join(output_dir, distribution_plot))
-
-print(f"Analysis complete. Results saved in {output_dir}/")
+print("Analysis completed. Check generated visualizations and insights.")
