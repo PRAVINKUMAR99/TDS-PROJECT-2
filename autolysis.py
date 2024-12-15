@@ -6,8 +6,7 @@
 #   "seaborn",
 #   "openai==0.28.0",
 #   "tenacity",
-#   "scikit-learn",
-#   "base64"
+#   "scikit-learn"
 # ]
 # ///
 
