@@ -86,7 +86,7 @@ else:
 
 # Function to query LLM with enhanced error handling and logging
 # This function interacts with the OpenAI API to generate insights or narratives
-from openai.error import AuthenticationError, RateLimitError, APIError, InvalidRequestError
+from openai import error
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=2, max=20), reraise=True)
 def query_llm(prompt):
@@ -105,16 +105,16 @@ def query_llm(prompt):
             return response["choices"][0]["message"]["content"]
         else:
             raise ValueError("Invalid response structure from OpenAI API.")
-    except AuthenticationError:
+    except error.AuthenticationError:
         print("Error: Authentication failed. Check your API token.")
         raise
-    except RateLimitError:
+    except error.RateLimitError:
         print("Error: Rate limit exceeded. Try again later.")
         raise
-    except APIError as e:
+    except error.APIError as e:
         print(f"API Error: {e}")
         raise
-    except InvalidRequestError as e:
+    except error.InvalidRequestError as e:
         print(f"Invalid Request: {e}")
         raise
     except Exception as e:
@@ -212,17 +212,14 @@ try:
 
 except Exception as e:
     print(f"Error during dynamic LLM interactions: {e}")
-
-# Use ThreadPoolExecutor to create visualizations concurrently
-with ThreadPoolExecutor() as executor:
+    with ThreadPoolExecutor() as executor:
     executor.submit(create_correlation_heatmap)
     executor.submit(create_distribution_plots)
     executor.submit(outlier_detection)
     executor.submit(clustering_analysis)
     executor.submit(pca_analysis)
 
-# Generate narrative with robust prompt
-# Create a detailed Markdown-formatted report summarizing the analysis
+
 narrative_prompt = f"""
 You are a data storytelling assistant.
 Based on the following details, create a Markdown-formatted report:
