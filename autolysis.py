@@ -198,8 +198,11 @@ def outlier_detection():
         outliers = model.fit_predict(numeric_df)
         df["Outlier"] = (outliers == -1)
         plt.figure(figsize=(8, 6))
-        sns.countplot(x="Outlier", data=df)
+        sns.countplot(x="Outlier", data=df, palette="Set2")
         plt.title("Outlier Detection")
+        plt.xlabel("Outlier Status (0: Inliers, 1: Outliers)")
+        plt.ylabel("Frequency")
+        plt.annotate(f"Total Outliers: {df['Outlier'].sum()}", xy=(0.5, 0.9), xycoords="axes fraction", color="red")
         plt.savefig("outlier_detection.png")
         plt.close()
 
@@ -214,6 +217,10 @@ def clustering_analysis():
         plt.figure(figsize=(8, 6))
         sns.scatterplot(x=numeric_df.columns[0], y=numeric_df.columns[1], hue="Cluster", data=df, palette="viridis")
         plt.title("Clustering Analysis")
+        plt.xlabel(numeric_df.columns[0])
+        plt.ylabel(numeric_df.columns[1])
+        plt.legend(title="Cluster")
+        plt.annotate("Cluster centroids", xy=(0, 0), color="red")  # Example placeholder annotation
         plt.savefig("clustering_analysis.png")
         plt.close()
 
@@ -224,12 +231,25 @@ def pca_analysis():
         scaled_data = scaler.fit_transform(numeric_df)
         pca = PCA(n_components=2)
         components = pca.fit_transform(scaled_data)
+        explained_variance = pca.explained_variance_ratio_
         df["PCA1"] = components[:, 0]
         df["PCA2"] = components[:, 1]
         plt.figure(figsize=(8, 6))
         sns.scatterplot(x="PCA1", y="PCA2", hue="Cluster", data=df, palette="viridis")
-        plt.title("PCA Analysis")
+        plt.title("PCA Analysis (Explained Variance: {:.2f}%)".format(sum(explained_variance) * 100))
+        plt.xlabel("Principal Component 1")
+        plt.ylabel("Principal Component 2")
+        plt.legend(title="Cluster")
         plt.savefig("pca_analysis.png")
+        plt.close()
+
+        # Bar plot for explained variance
+        plt.figure(figsize=(8, 6))
+        plt.bar(range(1, len(explained_variance) + 1), explained_variance * 100)
+        plt.title("Explained Variance by PCA Components")
+        plt.xlabel("Principal Components")
+        plt.ylabel("Percentage of Variance Explained")
+        plt.savefig("pca_variance.png")
         plt.close()
 
 # Use ThreadPoolExecutor to create visualizations concurrently
